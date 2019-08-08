@@ -7,7 +7,7 @@ import logging
 import threading
 from .SingleLoader import SingleFileLoader
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - MultipleFileLoader - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 """
@@ -49,7 +49,7 @@ class MultipleFileLoader:
                     nname = os.path.basename(path)
                     fformat = os.path.splitext(nname)[-1][1:]
                     single.set_attr(ppath, nname, fformat)
-                    self._loaded_file.append(threading.Thread(target=single.load))
+                    self._loaded_file.append(threading.Thread(target=single.load, name=nname))
                 else:
                     logging.info("drop a dir with path={}".format(path))
         except FileNotFoundError as f_not_e:

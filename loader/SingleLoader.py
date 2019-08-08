@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 class SingleFileLoader:
 
-    def __init__(self):
+    def __init__(self, limit=100):
         self._file_path = ""
         self._file_format = ""  # .cpp, .hpp, .h, .py, .java, ...
         self._file_name = ""
         self.chunk = ""
-        self.limitation = 1024*1024  # 1MB
+        self.limitation = limit  #
         self.pages = []  # 对于超过限制大小的单个文件进行分页处理
 
     """
@@ -27,6 +27,12 @@ class SingleFileLoader:
         :param format : 文件格式
         :return : void
     """
+    def set_attr_by_path(self, path):
+        self._file_path = path
+        self._file_name = os.path.basename(path)
+        self._file_format = os.path.splitext(path)[-1][1:]
+        assert self._file_format in ["cpp", "hpp", "h", "py", "java"]
+
     def set_attr(self, path, name, format):
         assert format in ["cpp", "hpp", "h", "py", "java"]
 
@@ -47,15 +53,17 @@ class SingleFileLoader:
 
         try:
             file_size = os.path.getsize(self._file_path)
-            logging.info("open file with size={}, aka={}MB".format(file_size, file_size / self.limitation))
+            logging.info("open file with size={}, aka {}MB".format(file_size, file_size / self.limitation))
             if file_size > self.limitation:  # if source code file's size bigger than 1MB
-                read_size = 0
+
                 with open(self._file_path, "r", encoding="utf8") as target:
-                    while read_size*2 < file_size:  # TODO
+                    while True:
                         self.chunk = target.read(self.limitation)
-                        self.pages.append(self.chunk)
-                        read_size += len(self.chunk)
-                logging.info("pages = {}, read characters = {} ".format(len(self.pages), read_size))
+                        if len(self.chunk) == 0:
+                            break
+                        else:
+                            self.pages.append(self.chunk)
+                logging.info("do paging , count = {}".format(len(self.pages)))
             else:
                 with open(self._file_path, "r") as target:
                     self.pages.append(target.read())
