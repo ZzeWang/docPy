@@ -23,9 +23,22 @@ class MultipleFileLoader:
         self._files_cnt = 0
         self._loaded_file = []  # SingleFileLoader
 
+    """
+        setter方法
+        vod set_attr(v1)
+        :param lib : the group for files
+        :return : void
+    """
     def set_attr(self, lib):
         self._files_lib_path = lib
 
+    """
+        加载单个文件到self._loaded_file 并
+        启动多个线程加载单个文件
+        void load(void)
+        :param:void
+        :return:void
+    """
     def load(self):
         try:
             for path in os.listdir(self._files_lib_path):

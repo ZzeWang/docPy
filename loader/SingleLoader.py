@@ -5,7 +5,7 @@ import os
 import re
 import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - SingleFileLoader - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -57,6 +57,8 @@ class SingleFileLoader:
                         read_size += len(self.chunk)
                 logging.info("pages = {}, read characters = {} ".format(len(self.pages), read_size))
             else:
-                self.pages.append(open(self._file_path, "r").read())
+                with open(self._file_path, "r") as target:
+                    self.pages.append(target.read())
+
         except FileNotFoundError as e1:
             logging.error(msg="file: {} not exists".format(self._file_path))
