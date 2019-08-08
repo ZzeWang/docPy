@@ -3,7 +3,10 @@
 """
 import re
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from loader.SingleLoader import SingleFileLoader
+from functional import AbstractSignalFunctional
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -27,6 +30,11 @@ class AbstractParser:
             self._after = ""
             self._before = ""
 
+        self._mapper = AbstractSignalFunctional()
+        if kwargs and kwargs["mapper"]:
+            if isinstance(kwargs["mapper"], AbstractSignalFunctional):
+                self._mapper = kwargs["mapper"]
+
         if kwargs and kwargs["path"]:
             self.file.set_attr_by_path(kwargs["path"])
             self.file.load()
@@ -34,9 +42,13 @@ class AbstractParser:
             logging.fatal("no file input")
             raise Exception
 
-        self._table = {}  # signals table
         self._comment_list = []  # block of comments \/\*
-        self._comment_pattern = re.compile("{}[\n ]*(.*?)[\n ]*{}".format(self._before, self._after))
+        self._comment_pattern = re.compile("{}(.*?){}".format(self._before, self._after), re.DOTALL)
+
+        self.iter_of_comment = iter(self._comment_list)
+
+        # 用于处理符号时
+        self._thread_executor = ThreadPoolExecutor(max_workers=1)
 
     """
         由于存在分页问题，可能会造成同一页内
@@ -70,8 +82,8 @@ class AbstractParser:
     def parse_comment(self):
         for page_c in range(len(self.file.pages)):
             is_not_page, idx = self.pre_symmetric_check(self.file.pages[page_c])
-
-            for result in re.findall(self._comment_pattern, self.file.pages[page_c]):
+            tmp = re.findall(self._comment_pattern, self.file.pages[page_c])
+            for result in tmp:
                 self._comment_list.append(result)
                 logging.info("find a comment block with length={}".format(len(result)))
 
@@ -98,3 +110,41 @@ class AbstractParser:
                     logging.info(
                         "find a not-continuity comment block with starting at page={}:{}, end up with page={}:{}".format(
                             page_c, idx, page_c + 1, pos))
+
+    def __get_next_comment(self):
+        try:
+            return next(self.iter_of_comment).strip()
+        except StopIteration as e:
+            return None
+        pass
+
+    """
+        对每一块注释，匹配特征符号（@，#，！等），调用
+        self._mapper的方法处理，此处_mapper必须是AbstractSignalFunctional的子类
+    """
+
+    def switch(self, target_file):
+        function_pat = re.compile("@: *[a-zA-Z_0-9]+ *(?:[a-zA-Z_0-9]+|[a-zA-Z_0-9]+:{2}) *[a-zA-Z_0-9]+\(.*?\)")
+        class_pat = re.compile("@: *class *[a-zA-Z_0-9]")
+        dependency_pat = re.compile("#:")
+        header_pat = re.compile("!:")
+        tasks = []
+        while True:
+            comment = self.__get_next_comment()
+            if comment is None:
+                break
+
+            if comment[0] == "&" and re.search(class_pat, comment) is not None:
+                tasks.append(self._thread_executor.submit(self._mapper.func_class_signature, comment=comment + "\n", path=target_file))
+            elif comment[0] == "@" and re.search(function_pat, comment) is not None:
+                self._mapper.func_function_signature(comment=comment+"\n", path=target_file)
+                # tasks.append(self._thread_executor.submit(self._mapper.func_function_signature, comment=comment+"\n", path=target_file))
+            elif comment[0] == "#" and re.search(dependency_pat, comment):
+
+                self._mapper.func_dependency(comment=comment)
+            elif comment[0] == "!" and re.search(header_pat, comment):
+                self._mapper.func_header(comment=comment)
+            else:
+                logging.debug("capture a Non-doc comment")
+        for future in as_completed(tasks):
+            logging.info("task {} have finished".format(future))
