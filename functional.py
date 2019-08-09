@@ -95,11 +95,13 @@ class SynSignalFunctional(AbstractSignalFunctional):
 """
    建立模块/类/函数之间的链接
 """
-class LinkAbleSignalFunctional(SynSignalFunctional)
+
+
+class LinkAbleSignalFunctional(SynSignalFunctional):
 
     def __init__(self):
         super().__init__()
-        self._class_set = set() # record the parsed class's name
+        self._class_set = set()  # record the parsed class's name
         self._function_set = set()
         self._module_set = set()
         self._var_set = set()
@@ -109,28 +111,6 @@ class LinkAbleSignalFunctional(SynSignalFunctional)
         self.__method_of_class = {}  # {class_name: [methods of it]}
         self.__var_of_module = {}
         self.__var_of_class = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # TODO wait to refactor
@@ -146,13 +126,14 @@ class ToMdSignalFunctional(SynSignalFunctional):
         super().__init__()
         self._patterns = {
             "func_name_pat": re.compile("@: *([a-zA-Z_0-9]+) *\n"),
-            "in_param_pat": re.compile(
-                ">: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *(?P<name>[a-zA-Z_0-9]+) *: *(?P<desc>.*?) *\n"),
+            "class_name_pat": re.compile("&:(.*?) *\n\s*\$:(.*?) *\n", re.DOTALL),
+            "var_name_pat": re.compile("Var: *\((.*?)\)*(.+?)\n"),
+            "in_param_pat": re.compile(">: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *(?P<name>[a-zA-Z_0-9]+) *: *(?P<desc>.*?) *\n"),
             "out_param_pat": re.compile("<: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *\n"),
             "desc_pat": re.compile("\$:(.*?) *\n"),
-            "class_name_pat": re.compile("&:(.*?) *\n\s*\$:(.*?) *\n", re.DOTALL),
             "header_pat": re.compile("!: *(.*?) *\n"),
-            "dep_pat": re.compile("#: *(.*?) *\n")
+            "dep_pat": re.compile("#: *(.*?) *\n"),
+            "link_pat": re.compile("(?:(?:To|O)|(?:Lk|K)|(?:[Mm])): *(?:(.*?),|(.*?)) *\n")
         }
 
     """

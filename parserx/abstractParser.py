@@ -128,6 +128,8 @@ class AbstractParser:
         class_pat = re.compile("&: *class *[a-zA-Z_0-9]")
         dependency_pat = re.compile("#:")
         header_pat = re.compile("!:")
+        variable_pat = re.compile("Var:")
+
         tasks = []
         while True:
             comment = self.__get_next_comment()
@@ -146,6 +148,8 @@ class AbstractParser:
             elif comment[0] == "@" and re.search(function_pat, comment) is not None:
                 tasks.append(self._thread_executor.submit(self._mapper.func_function_signature, comment=comment + "\n",
                                                           path=target_file))
+            elif comment[:3] == "Var" and re.search(variable_pat, comment):
+                logging.info("capture a var")
             else:
                 logging.debug("capture a Non-doc comment")
         for future in as_completed(tasks):
