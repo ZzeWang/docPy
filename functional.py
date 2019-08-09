@@ -9,72 +9,187 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %
 logger = logging.getLogger(__name__)
 
 
+class BasedObject:
+    def __init__(self, name):
+        self.name = name
+        self.desc = ""
+
+
+class DependencyObject(BasedObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.deps = []
+
+
+class VariableObject(BasedObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.its_module = None
+        self.its_class = None
+
+
+class ModuleObject(BasedObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.classes = []
+        self.variables = []
+        self.functions = []
+
+
+class FunctionObject(BasedObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.its_class = None
+        self.its_module = None
+        self.in_param = []
+        self.out_type = ""
+
+
+class ClassObject(BasedObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.methods = []
+        self.variables = []
+
+
 class AbstractSignalFunctional(object):
-    """
-
-
-    """
 
     def __init__(self):
-        self._patterns = {}
-        self.have_set_header = False
-        self.have_set_dependency = False
 
-    """
-        用来提取仅有一个内容的情况，
-    """
+        self._patterns = {
+            "func_name_pat": re.compile("@: *([a-zA-Z_0-9]+) *\n"),
+            "class_name_pat": re.compile("&: *class *(.*?) *\n"),
+            "var_name_pat": re.compile("[vV]ar: *\((.*?)\) *(.*?) *\n"),
+            "in_param_pat": re.compile(
+                ">: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *(?P<name>[a-zA-Z_0-9]+) *: *(?P<desc>.*?) *\n"),
+            "out_param_pat": re.compile("<: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *\n"),
+            "desc_pat": re.compile("\$:(.*?)\n"),
+            "header_pat": re.compile("!: *(.*?) *\n"),
+            "dep_pat": re.compile("#: *(.*?) *\n"),
+            "link_pat": re.compile(" (?:(?:[ToOt]+)|(?:[LKk]+)|(?:[Mm])): *.*? *\n")
+        }
 
-    def combine_to_tuple(self, key, string):
+        self._class_set = {}
+        self._module_set = {}
+        self._variable_set = {}
+        self._header_set = {}
+        self._function_set = {}
+
+    def combine_to_tuple(self, key: str, string: str):
         for single in re.findall(self._patterns[key], string):
             if isinstance(single, tuple):
                 yield single
             else:
                 yield (single,)
 
+    def __break_down(self, sp: str) -> tuple:
+        return sp[:sp.find(":")].strip().upper(), [i.strip() for i in sp[sp.find(":") + 1:].split(",")]
+
+    def link(self, tgt, parents):
+        type, pts = self.__break_down(parents)
+
+        if isinstance(tgt, ModuleObject):
+            logging.info("{} module do not necessary to have a parent.".format(tgt.name))
+            return False
+
+        if isinstance(tgt, ClassObject):
+            for parent in pts:
+                # TODO when parent do not exits
+                try:
+                    self._module_set[parent].classes.append(tgt)
+                    logging.info("link class '{}' -> module '{}'".format(tgt.name, parent))
+                except KeyError as e:
+                    logging.error("class '{}' do not exists or have not been created.".format(parent))
+                    return False
+            return True
+
+        if isinstance(tgt, FunctionObject):
+            for parent in pts:
+                # TODO when parent do not exits
+
+                if type == "M":
+                    try:
+                        self._class_set[parent].methods.append(tgt)
+                        logging.info("link function '{}' -> class '{}'".format(tgt.name, parent))
+                    except KeyError:
+                        logging.error("class '{}' do not exists or have not been created.".format(parent))
+                elif type == "LK":
+                    try:
+                        self._module_set[parent].functions.append(tgt)
+                        logging.info("link function '{}' -> module '{}'".format(tgt.name, parent))
+                    except KeyError:
+                        logging.error("module '{}' do not exists or have not been created.".format(parent))
+                else:
+                    logging.error("suffix may be error, with suffix={}(type)".format(type))
+                    return False
+
+            return True
+        if isinstance(tgt, VariableObject):
+            for parent in pts:
+                # TODO when parent do not exits
+                try:
+                    if type == "M":
+                        self._class_set[parent].variables.append(tgt)
+                        logging.info("link variable '{}' -> class '{}'".format(tgt.name, parent))
+                    elif type == "LK":
+                        self._module_set[parent].variables.append(tgt)
+                        logging.info("link variable '{}' -> module '{}'".format(tgt.name, parent))
+                    else:
+                        logging.error("suffix may be error, with suffix={}(type)".format(type))
+                        return False
+                except KeyError as e:
+                    logging.error("class or module '{}' do not exists or have not been created.".format(parent))
+                    return False
+            return True
+
     def func_go(self, *args, **kwargs):
+        global target
+        desc = ""
         for oi in args:
             try:
                 result = self.combine_to_tuple(oi, kwargs["comment"])
                 while True:
                     try:
-                        __class = next(result)  # class of result
-                        formatted_info = self.format_this(__class, kwargs["format"])
-                        self.dump(formatted_info, kwargs["path"])
+                        tx = next(result)
+                        if oi == "class_name_pat":
+                            cls = ClassObject(tx[0])
+                            self._class_set[tx[0]] = cls
+                            target = cls
+                            logging.info("create a new class '{}'".format(target.name))
+                        elif oi == "func_name_pat":
+                            func = FunctionObject(tx[0])
+                            self._function_set[tx[0]] = func
+                            target = func
+                            logging.info("create a new function '{}'".format(target.name))
+                        elif oi == "var_name_pat":
+                            var = VariableObject(tx[0])
+                            self._variable_set[tx[0]] = var
+                            target = var
+                            logging.info("create a new variable '{}'".format(target.name))
+                        elif oi == "header_pat":
+                            m = ModuleObject(tx[0])
+                            self._module_set[tx[0]] = m
+                            target = m
+                            logging.info("create a new module '{}'".format(target.name))
+                        elif oi == "desc_pat":
+                            desc += tx[0]
+                        elif oi == "link_pat":
+                            self.link(target, tx[0])  # tx(parent) <- target
+                        elif oi == "in_param_pat":
+                            target.in_param.append(tx)
+                            logging.info(
+                                "create a new function input param '{}' type={}, desc={}".format(tx[1], tx[0], tx[2]))
+                        elif oi == "out_param_pat":
+                            target.out_type = tx[0]
+                            logging.info(
+                                "create a new function output param type={}".format(tx[0]))
+                        else:
+                            break
                     except StopIteration:
                         break
             except KeyError as e:
                 logging.fatal(e)
-
-    def format_this(self, result, format_str):
-        return ""
-
-    """
-        用于处理函数签名映射 @ to any
-    """
-
-    def func_function_signature(self, **kwargs):
-        pass
-
-    """
-        用于处理类签名映射 & to any
-    """
-
-    def func_class_signature(self, **kwargs):
-        pass
-
-    """
-        用于处理源文件综述映射 ! to any
-    """
-
-    def func_header(self, **kwargs):
-        pass
-
-    """
-        用于处理依赖映射 # to any
-    """
-
-    def func_dependency(self, **kwargs):
-        pass
+        target.desc = desc
 
     def dump(self, info, path):
         pass
@@ -97,22 +212,6 @@ class SynSignalFunctional(AbstractSignalFunctional):
 """
 
 
-class LinkAbleSignalFunctional(SynSignalFunctional):
-
-    def __init__(self):
-        super().__init__()
-        self._class_set = set()  # record the parsed class's name
-        self._function_set = set()
-        self._module_set = set()
-        self._var_set = set()
-
-        self.__class_of_module = {}  # {module_name: [classes of it]}
-        self.__function_of_module = {}  # {module_name: [function of it]}
-        self.__method_of_class = {}  # {class_name: [methods of it]}
-        self.__var_of_module = {}
-        self.__var_of_class = {}
-
-
 # TODO wait to refactor
 class ToMdSignalFunctional(SynSignalFunctional):
     H1 = "#"
@@ -121,32 +220,6 @@ class ToMdSignalFunctional(SynSignalFunctional):
     H4 = "####"
     Bar = "---"
     Desc = "\n"
-
-    def __init__(self):
-        super().__init__()
-        self._patterns = {
-            "func_name_pat": re.compile("@: *([a-zA-Z_0-9]+) *\n"),
-            "class_name_pat": re.compile("&:(.*?) *\n\s*\$:(.*?) *\n", re.DOTALL),
-            "var_name_pat": re.compile("Var: *\((.*?)\)*(.+?)\n"),
-            "in_param_pat": re.compile(">: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *(?P<name>[a-zA-Z_0-9]+) *: *(?P<desc>.*?) *\n"),
-            "out_param_pat": re.compile("<: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *\n"),
-            "desc_pat": re.compile("\$:(.*?) *\n"),
-            "header_pat": re.compile("!: *(.*?) *\n"),
-            "dep_pat": re.compile("#: *(.*?) *\n"),
-            "link_pat": re.compile("(?:(?:To|O)|(?:Lk|K)|(?:[Mm])): *(?:(.*?),|(.*?)) *\n")
-        }
-
-    """
-        such as
-        /*
-            @: foo
-            >: (int) para1:desc
-            >: (string) para2:desc
-            <: (bool)
-            $: this function calls foo, and it has two param , which type is int and string respectively
-            $: And its returned value's type is a bool variable
-        */
-    """
 
     def func_function_signature(self, **kwargs):
         name_pat = re.compile("@: *([a-zA-Z_0-9]+) *\n")

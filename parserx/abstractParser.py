@@ -128,7 +128,7 @@ class AbstractParser:
         class_pat = re.compile("&: *class *[a-zA-Z_0-9]")
         dependency_pat = re.compile("#:")
         header_pat = re.compile("!:")
-        variable_pat = re.compile("Var:")
+        variable_pat = re.compile("v|Var:")
 
         tasks = []
         while True:
@@ -136,20 +136,17 @@ class AbstractParser:
             if comment is None:
                 break
 
+
             if comment[0] == "#" and re.search(dependency_pat, comment):
-                tasks.append(self._thread_executor.submit(self._mapper.func_dependency, comment=comment + "\n",
-                                                          path=target_file))
+                tasks.append(self._thread_executor.submit(self._mapper.func_go,  "dep_pat", comment=comment + "\n",  path=target_file))
             elif comment[0] == "!" and re.search(header_pat, comment):
-                tasks.append(
-                    self._thread_executor.submit(self._mapper.func_header, comment=comment + "\n", path=target_file))
+                tasks.append(self._thread_executor.submit(self._mapper.func_go, "header_pat", "desc_pat", comment=comment + "\n", path=target_file))
             elif comment[0] == "&" and re.search(class_pat, comment) is not None:
-                tasks.append(self._thread_executor.submit(self._mapper.func_class_signature, comment=comment + "\n",
-                                                          path=target_file))
+                tasks.append(self._thread_executor.submit(self._mapper.func_go, "class_name_pat", "desc_pat", "link_pat",comment=comment + "\n", path=target_file))
             elif comment[0] == "@" and re.search(function_pat, comment) is not None:
-                tasks.append(self._thread_executor.submit(self._mapper.func_function_signature, comment=comment + "\n",
-                                                          path=target_file))
-            elif comment[:3] == "Var" and re.search(variable_pat, comment):
-                logging.info("capture a var")
+                tasks.append(self._thread_executor.submit(self._mapper.func_go, "func_name_pat", "in_param_pat", "out_param_pat","desc_pat", "link_pat", comment=comment + "\n",path=target_file))
+            elif comment[:3].upper() == "VAR" and re.search(variable_pat, comment):
+                tasks.append(self._thread_executor.submit(self._mapper.func_go,"var_name_pat", "desc_pat","link_pat", comment=comment + "\n", path=target_file))
             else:
                 logging.debug("capture a Non-doc comment")
         for future in as_completed(tasks):
