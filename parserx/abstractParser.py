@@ -48,7 +48,7 @@ class AbstractParser:
         self.iter_of_comment = iter(self._comment_list)
 
         # 用于处理符号时
-        self._thread_executor = ThreadPoolExecutor(max_workers=1)
+        self._thread_executor = ThreadPoolExecutor(max_workers=3)
 
     """
         由于存在分页问题，可能会造成同一页内
@@ -124,8 +124,8 @@ class AbstractParser:
     """
 
     def switch(self, target_file):
-        function_pat = re.compile("@: *[a-zA-Z_0-9]+ *(?:[a-zA-Z_0-9]+|[a-zA-Z_0-9]+:{2}) *[a-zA-Z_0-9]+\(.*?\)")
-        class_pat = re.compile("@: *class *[a-zA-Z_0-9]")
+        function_pat = re.compile("@: *[a-zA-Z_0-9]+ *(?:[a-zA-Z_0-9]+|[a-zA-Z_0-9]+:{2}) *")
+        class_pat = re.compile("&: *class *[a-zA-Z_0-9]")
         dependency_pat = re.compile("#:")
         header_pat = re.compile("!:")
         tasks = []
@@ -134,16 +134,14 @@ class AbstractParser:
             if comment is None:
                 break
 
-            if comment[0] == "&" and re.search(class_pat, comment) is not None:
+            if comment[0] == "#" and re.search(dependency_pat, comment):
+                tasks.append(self._thread_executor.submit(self._mapper.func_dependency, comment=comment + "\n", path=target_file))
+            elif comment[0] == "!" and re.search(header_pat, comment):
+                tasks.append(self._thread_executor.submit(self._mapper.func_header, comment=comment + "\n", path=target_file))
+            elif comment[0] == "&" and re.search(class_pat, comment) is not None:
                 tasks.append(self._thread_executor.submit(self._mapper.func_class_signature, comment=comment + "\n", path=target_file))
             elif comment[0] == "@" and re.search(function_pat, comment) is not None:
-                self._mapper.func_function_signature(comment=comment+"\n", path=target_file)
-                # tasks.append(self._thread_executor.submit(self._mapper.func_function_signature, comment=comment+"\n", path=target_file))
-            elif comment[0] == "#" and re.search(dependency_pat, comment):
-
-                self._mapper.func_dependency(comment=comment)
-            elif comment[0] == "!" and re.search(header_pat, comment):
-                self._mapper.func_header(comment=comment)
+                tasks.append(self._thread_executor.submit(self._mapper.func_function_signature, comment=comment+"\n", path=target_file))
             else:
                 logging.debug("capture a Non-doc comment")
         for future in as_completed(tasks):

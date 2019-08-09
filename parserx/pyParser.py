@@ -9,7 +9,7 @@ from functional import ToMdSignalFunctional
 """
     解析C++文件
 """
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - CppParser - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - PyParser - %(levelname)s - %(message)s')
 logger = logging.getLogger("CppParser")
 
 """
@@ -18,11 +18,11 @@ logger = logging.getLogger("CppParser")
         $:the class to parse a list of comments for c++ lang
         $:bala bala bala...
     */
-    
+
     /*
         @:void getName(std::string, int idx)
-        >:(std::string) v1: $a string of name
-        >:(int) idx: $a index of name
+        >:(std::string) v1: a string of name
+        >:(int) idx: a index of name
         <:void 
         $:this method is going to be deleted after version 1.0.3
         ---
@@ -30,9 +30,9 @@ logger = logging.getLogger("CppParser")
 """
 
 
-class CppParser(AbstractParser):
+class PyParser(AbstractParser):
     def __init__(self, path):
-        super().__init__(before=r"\/\*", after=r"\*\/", path=path, mapper=ToMdSignalFunctional())
+        super().__init__(before=r"\"\"\"", after=r"\"\"\"", path=path, mapper=ToMdSignalFunctional())
         try:
             self.parse_comment()
         except Exception as e:

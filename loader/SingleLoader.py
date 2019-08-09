@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class SingleFileLoader:
 
-    def __init__(self, limit=100):
+    def __init__(self, limit=2*1024*1024):
         self._file_path = ""
         self._file_format = ""  # .cpp, .hpp, .h, .py, .java, ...
         self._file_name = ""
@@ -65,7 +65,7 @@ class SingleFileLoader:
                             self.pages.append(self.chunk)
                 logging.info("do paging , count = {}".format(len(self.pages)))
             else:
-                with open(self._file_path, "r") as target:
+                with open(self._file_path, "r", encoding="utf8") as target:
                     self.pages.append(target.read())
 
         except FileNotFoundError as e1:
