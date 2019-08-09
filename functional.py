@@ -24,8 +24,7 @@ class DependencyObject(BasedObject):
 class VariableObject(BasedObject):
     def __init__(self, name):
         super().__init__(name)
-        self.its_module = None
-        self.its_class = None
+        self.type = None
 
 
 class ModuleObject(BasedObject):
@@ -162,7 +161,8 @@ class AbstractSignalFunctional(object):
                             target = func
                             logging.info("create a new function '{}'".format(target.name))
                         elif oi == "var_name_pat":
-                            var = VariableObject(tx[0])
+                            var = VariableObject(tx[1])
+                            var.type = tx[0]
                             self._variable_set[tx[0]] = var
                             target = var
                             logging.info("create a new variable '{}'".format(target.name))
@@ -207,126 +207,32 @@ class SynSignalFunctional(AbstractSignalFunctional):
         self.file_lock.release()
 
 
-"""
-   建立模块/类/函数之间的链接
-"""
+class ToMarkdownSignalFunctional(SynSignalFunctional):
+    H1 = "# "
+    H2 = "## "
+    H3 = "### "
+    H4 = "#### "
+    Bar = " --- "
+    Desc = " \n "
 
+    def __init__(self):
+        super().__init__()
+        self.chunk = ""
 
-# TODO wait to refactor
-class ToMdSignalFunctional(SynSignalFunctional):
-    H1 = "#"
-    H2 = "##"
-    H3 = "###"
-    H4 = "####"
-    Bar = "---"
-    Desc = "\n"
-
-    def func_function_signature(self, **kwargs):
-        name_pat = re.compile("@: *([a-zA-Z_0-9]+) *\n")
-        in_pat = re.compile(">: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *(?P<name>[a-zA-Z_0-9]+) *: *(?P<desc>.*?) *\n")
-        out_pat = re.compile("<: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *\n")
-        desc_pat = re.compile("\$:(.*?) *\n")
-        try:
-            func_name = re.findall(name_pat, kwargs["comment"])[0]
-            in_list = re.findall(in_pat, kwargs["comment"])
-            out_type = re.findall(out_pat, kwargs["comment"])[0]
-            desc_list = re.findall(desc_pat, kwargs["comment"])
-
-            md_func_name = "{} {}\n\n".format(self.__class__().H2, func_name)
-
-            if out_type == "void":
-                md_out_type = "{} *return:* void\n\n".format(self.__class__().H3)
-            else:
-                md_out_type = "{} *return:* void\n\n".format(self.__class__().H3, out_type)
-            md_input_param = ""
-            md_desc_info = ""
-
-            for val in in_list:
-                type, name, desc = val[0], val[1], val[2]
-                md_input_param += "{} {}->(*{}*):\n{} {}\n".format(self.__class__().H3, name, type,
-                                                                   self.__class__().Desc,
-                                                                   desc)
-            for desc in desc_list:
-                md_desc_info += desc
-
-            md_desc_info += "\n\n" + self.__class__().Bar + "\n\n"
-
-            self.dump(md_func_name + md_input_param + md_out_type + md_desc_info, kwargs["path"])
-            logging.info("add a function name={}".format(md_func_name))
-        except KeyError as e:
-            logging.fatal(e)
-        except IndexError as e:
-            logging.fatal(e)
-
-    """
-           such as
-           /*
-               &: CppClass
-               $: this is a c++ class
-           */
-           class CppClass ... 
-       """
-
-    def func_class_signature(self, **kwargs):
-        pattern = re.compile("&:(.*?) *\n\s*\$:(.*?) *\n", re.DOTALL)
-        try:
-            class_name = re.findall(pattern, kwargs["comment"])[0][0]
-            class_desc = re.findall(pattern, kwargs["comment"])[0][1]
-            md_class = "{} {}\n".format(ToMdSignalFunctional.H2, class_name)
-            md_desc = "{} {}\n".format(ToMdSignalFunctional.Desc, class_desc)
-            self.dump("{}\n{}\n\n{}\n".format(md_class, md_desc, self.__class__().Bar), kwargs["path"])
-            logging.info("add a class name={}".format(class_name))
-        except KeyError as e:
-            logging.fatal(e)
-        except IndexError as e:
-            logging.fatal(e)
-
-    """
-        such as
-        /*
-            !: this file contains all class 
-            !: that be used to deal with regex language
-            !: and some functional object.
-        */
-    """
-
-    def func_header(self, **kwargs):
-        pattern = re.compile("!: *(.*?) *\n")
-        try:
-            desc = re.findall(pattern, kwargs["comment"])
-            md_desc = self.__class__().H1 + " Description\n"
-            for d in desc:
-                md_desc += "{} ".format(d)
-            md_desc += "\n\n{}\n\n".format(self.__class__().Bar)
-            self.dump(md_desc, kwargs["path"])
-            logging.info("add a title")
-        except KeyError as e:
-            logging.fatal(e)
-        except IndexError as e:
-            logging.fatal(e)
-
-    """
-        such as 
-        /*
-            # iostream
-            # osgGA
-            # boost/smart_ptr/scoped_ptr
-        */
-    """
-
-    def func_dependency(self, **kwargs):
-        try:
-            dep = self.combine_to_tuple("dep_pat", kwargs["comment"])
-            md_dep = self.__class__().H1 + " Dependency\n"
-            while True:
-                try:
-                    md_dep += "{}\n".format(next(dep))
-                except StopIteration:
-                    break
-            md_dep += "\n\n{}\n\n".format(self.__class__().Bar)
-            self.dump(md_dep, kwargs["path"])
-            logging.info("add a title")
-        except KeyError as e:
-            logging.fatal(e)
-        except IndexError as e:
-            logging.fatal(e)
+    def markdown_format(self):
+        for md in self._module_set.keys():
+            md_name = self._module_set[md].name
+            md_desc = self._module_set[md].desc
+            self.chunk += ToMarkdownSignalFunctional.H1 + " *Modules* {}\n".format(md_name)
+            self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(md_desc)
+            self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
+            for var in self._module_set[md].variables:
+                self.chunk += ToMarkdownSignalFunctional.H2 + " *Variable* {}\n".format(var.name)
+                self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(var.desc)
+                self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
+            for cls in self._module_set[md].classes:
+                self.chunk += ToMarkdownSignalFunctional.H2 + " *Class* {}\n".format(cls.name)
+                for var in cls.variables:
+                    self.chunk += ToMarkdownSignalFunctional.H3 + " *var* {}: *({})*\n".format(var.name, var.type)
+                    self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(var.desc)
+        self.dump(self.chunk, r"E:\file\pyProj\docPy\test\targetfile")

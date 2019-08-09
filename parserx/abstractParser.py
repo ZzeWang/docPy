@@ -136,7 +136,6 @@ class AbstractParser:
             if comment is None:
                 break
 
-
             if comment[0] == "#" and re.search(dependency_pat, comment):
                 tasks.append(self._thread_executor.submit(self._mapper.func_go,  "dep_pat", comment=comment + "\n",  path=target_file))
             elif comment[0] == "!" and re.search(header_pat, comment):

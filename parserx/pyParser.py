@@ -4,7 +4,7 @@
 import re, logging
 from .abstractParser import AbstractParser
 from loader.SingleLoader import SingleFileLoader
-from functional import ToMdSignalFunctional
+from functional import ToMarkdownSignalFunctional
 
 """
     解析C++文件
@@ -32,7 +32,7 @@ logger = logging.getLogger("CppParser")
 
 class PyParser(AbstractParser):
     def __init__(self, path):
-        super().__init__(before=r"\"\"\"", after=r"\"\"\"", path=path, mapper=ToMdSignalFunctional())
+        super().__init__(before=r"\"\"\"", after=r"\"\"\"", path=path, mapper=ToMarkdownSignalFunctional())
         try:
             self.parse_comment()
         except Exception as e:
