@@ -135,13 +135,17 @@ class AbstractParser:
                 break
 
             if comment[0] == "#" and re.search(dependency_pat, comment):
-                tasks.append(self._thread_executor.submit(self._mapper.func_dependency, comment=comment + "\n", path=target_file))
+                tasks.append(self._thread_executor.submit(self._mapper.func_dependency, comment=comment + "\n",
+                                                          path=target_file))
             elif comment[0] == "!" and re.search(header_pat, comment):
-                tasks.append(self._thread_executor.submit(self._mapper.func_header, comment=comment + "\n", path=target_file))
+                tasks.append(
+                    self._thread_executor.submit(self._mapper.func_header, comment=comment + "\n", path=target_file))
             elif comment[0] == "&" and re.search(class_pat, comment) is not None:
-                tasks.append(self._thread_executor.submit(self._mapper.func_class_signature, comment=comment + "\n", path=target_file))
+                tasks.append(self._thread_executor.submit(self._mapper.func_class_signature, comment=comment + "\n",
+                                                          path=target_file))
             elif comment[0] == "@" and re.search(function_pat, comment) is not None:
-                tasks.append(self._thread_executor.submit(self._mapper.func_function_signature, comment=comment+"\n", path=target_file))
+                tasks.append(self._thread_executor.submit(self._mapper.func_function_signature, comment=comment + "\n",
+                                                          path=target_file))
             else:
                 logging.debug("capture a Non-doc comment")
         for future in as_completed(tasks):

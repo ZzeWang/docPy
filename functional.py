@@ -92,6 +92,47 @@ class SynSignalFunctional(AbstractSignalFunctional):
         self.file_lock.release()
 
 
+"""
+   建立模块/类/函数之间的链接
+"""
+class LinkAbleSignalFunctional(SynSignalFunctional)
+
+    def __init__(self):
+        super().__init__()
+        self._class_set = set() # record the parsed class's name
+        self._function_set = set()
+        self._module_set = set()
+        self._var_set = set()
+
+        self.__class_of_module = {}  # {module_name: [classes of it]}
+        self.__function_of_module = {}  # {module_name: [function of it]}
+        self.__method_of_class = {}  # {class_name: [methods of it]}
+        self.__var_of_module = {}
+        self.__var_of_class = {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # TODO wait to refactor
 class ToMdSignalFunctional(SynSignalFunctional):
     H1 = "#"
