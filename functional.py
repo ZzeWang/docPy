@@ -13,6 +13,7 @@ class BasedObject:
     def __init__(self, name):
         self.name = name
         self.desc = ""
+        self.linked_to = None
 
 
 class DependencyObject(BasedObject):
@@ -25,6 +26,7 @@ class VariableObject(BasedObject):
     def __init__(self, name):
         super().__init__(name)
         self.type = None
+
 
 
 class ModuleObject(BasedObject):
@@ -96,6 +98,7 @@ class AbstractSignalFunctional(object):
                 # TODO when parent do not exits
                 try:
                     self._module_set[parent].classes.append(tgt)
+                    tgt.linked_to = self._module_set[parent]
                     logging.info("link class '{}' -> module '{}'".format(tgt.name, parent))
                 except KeyError as e:
                     logging.error("class '{}' do not exists or have not been created.".format(parent))
@@ -109,12 +112,14 @@ class AbstractSignalFunctional(object):
                 if type == "M":
                     try:
                         self._class_set[parent].methods.append(tgt)
+                        tgt.linked_to = self._class_set[parent]
                         logging.info("link function '{}' -> class '{}'".format(tgt.name, parent))
                     except KeyError:
                         logging.error("class '{}' do not exists or have not been created.".format(parent))
                 elif type == "LK":
                     try:
                         self._module_set[parent].functions.append(tgt)
+                        tgt.linked_to = self._module_set[parent]
                         logging.info("link function '{}' -> module '{}'".format(tgt.name, parent))
                     except KeyError:
                         logging.error("module '{}' do not exists or have not been created.".format(parent))
@@ -129,9 +134,11 @@ class AbstractSignalFunctional(object):
                 try:
                     if type == "M":
                         self._class_set[parent].variables.append(tgt)
+                        tgt.linked_to = self._class_set[parent]
                         logging.info("link variable '{}' -> class '{}'".format(tgt.name, parent))
                     elif type == "LK":
                         self._module_set[parent].variables.append(tgt)
+                        tgt.linked_to = self._module_set[parent]
                         logging.info("link variable '{}' -> module '{}'".format(tgt.name, parent))
                     else:
                         logging.error("suffix may be error, with suffix={}(type)".format(type))
@@ -149,6 +156,7 @@ class AbstractSignalFunctional(object):
                 result = self.combine_to_tuple(oi, kwargs["comment"])
                 while True:
                     try:
+                        # TODO refactor
                         tx = next(result)
                         if oi == "class_name_pat":
                             cls = ClassObject(tx[0])
@@ -227,12 +235,26 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
             self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(md_desc)
             self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
             for var in self._module_set[md].variables:
-                self.chunk += ToMarkdownSignalFunctional.H2 + " *Variable* {}\n".format(var.name)
-                self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(var.desc)
-                self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
-            for cls in self._module_set[md].classes:
-                self.chunk += ToMarkdownSignalFunctional.H2 + " *Class* {}\n".format(cls.name)
-                for var in cls.variables:
-                    self.chunk += ToMarkdownSignalFunctional.H3 + " *var* {}: *({})*\n".format(var.name, var.type)
+                if var.linked_to is self._module_set[md]:
+                    self.chunk += ToMarkdownSignalFunctional.H2 + " *Variable*  {}\n".format(var.name)
                     self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(var.desc)
+                    self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
+            for func in self._module_set[md].functions:
+                if func.linked_to is self._module_set[md]:
+                    self.chunk += ToMarkdownSignalFunctional.H2 + "*Function*  {}\n".format(func.name)
+                    for param in func.in_param:
+                        self.chunk += ToMarkdownSignalFunctional.H4 + "*param*  ({}) {}:\n".format(param[0], param[1])
+                        self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n".format(param[2])
+                    self.chunk += ToMarkdownSignalFunctional.H4 + "*return*  {}\n".format(func.out_type)
+            for cls in self._module_set[md].classes:
+                self.chunk += ToMarkdownSignalFunctional.H2 + " *Class*  {}\n".format(cls.name)
+                for var in cls.variables:
+                    self.chunk += ToMarkdownSignalFunctional.H3 + " *var*  {}: *({})*\n".format(var.name, var.type)
+                    self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(var.desc)
+                for method in cls.methods:
+                    self.chunk += ToMarkdownSignalFunctional.H3 + " *method*  {}\n".format(method.name)
+                    for param in method.in_param:
+                        self.chunk += ToMarkdownSignalFunctional.H4 + "*param*  ({}) {}:\n".format(param[0], param[1])
+                        self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n".format(param[2])
+                    self.chunk += ToMarkdownSignalFunctional.H4 + "*return* {}\n".format(method.out_type)
         self.dump(self.chunk, r"E:\file\pyProj\docPy\test\targetfile")

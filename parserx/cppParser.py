@@ -12,23 +12,6 @@ from functional import ToMarkdownSignalFunctional
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - CppParser - %(levelname)s - %(message)s')
 logger = logging.getLogger("CppParser")
 
-"""
-    /*
-        @:template<class|typename T> CppParser : public|protected|private{}
-        $:the class to parse a list of comments for c++ lang
-        $:bala bala bala...
-    */
-    
-    /*
-        @:void getName(std::string, int idx)
-        >:(std::string) v1: $a string of name
-        >:(int) idx: $a index of name
-        <:void 
-        $:this method is going to be deleted after version 1.0.3
-        ---
-    */
-"""
-
 
 class CppParser(AbstractParser):
     def __init__(self, path):
