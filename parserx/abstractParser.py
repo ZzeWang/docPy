@@ -64,14 +64,7 @@ class AbstractParser:
     """
 
     def pre_symmetric_check(self, page_content):
-        pattern_before = re.compile(self._before)
-        pattern_after = re.compile(self._after)
-
-        if len(re.findall(pattern_before, page_content)) == \
-                len(re.findall(pattern_after, page_content)):
-            return True, -1
-        else:
-            return False, page_content.rfind(self._before.replace('\\', ''))
+        return False
 
     """
         从每页中提取出一个完整的注释快，并保存到self._comment_list中
@@ -80,43 +73,46 @@ class AbstractParser:
     """
 
     def parse_comment(self):
-        for page_c in range(len(self.file.pages)):
-            is_not_page, idx = self.pre_symmetric_check(self.file.pages[page_c])
+        page_c = 0
+        while page_c < len(self.file.pages):
+            not_page = self.pre_symmetric_check(self.file.pages[page_c])
+
             tmp = re.findall(self._comment_pattern, self.file.pages[page_c])
             for result in tmp:
                 self._comment_list.append(result)
                 logging.info("find a comment block with length={}".format(len(result)))
 
+            start = self.file.pages[page_c].rfind(self._before.replace("\\", ""))
+            if start == -1:
+                page_c += 1
+                continue
+            org_line = page_c
+            if not not_page:
+                while True:
+                    end = self.file.pages[page_c + 1].find(self._after.replace("\\", ""))
+                    page_c += 1
+                    if end != -1:
+                        break
+                base = self.file.pages[org_line][start + len(self._before.replace("\\", "")):]
+                org_line += 1
+                while org_line < page_c:
+                    base += self.file.pages[org_line]
+                    org_line += 1
+
+                self._comment_list.append(base + self.file.pages[page_c][:end])
+            else:
+                page_c += 1
+
             if page_c + 1 == len(self.file.pages):
                 break
-
-            if is_not_page:
-                pass
-            else:
-                pos = self.file.pages[page_c + 1].find(self._after.replace("\\", ""))
-
-                if pos == -1:  #
-                    self._comment_list.append(self.file.pages[page_c][idx + 2:])
-                    logging.info(
-                        "find a vary special situation with starting at page={}:{}, end up with page={}:{}".format(
-                            page_c, idx, page_c + 1, pos))
-                else:
-                    #  idx + len(...) 去除掉注释前缀的前一部分，
-                    #  pos  去除注释后缀的后一部分
-                    self._comment_list.append(
-                        self.file.pages[page_c][idx + len(self._before.replace("\\", "")):] + self.file.pages[
-                                                                                                  page_c + 1][:pos])
-                    self.file.pages[page_c + 1] = self.file.pages[page_c + 1][pos + 2:]  # 对齐
-                    logging.info(
-                        "find a not-continuity comment block with starting at page={}:{}, end up with page={}:{}".format(
-                            page_c, idx, page_c + 1, pos))
+        for idx, item in enumerate(self._comment_list):
+            self._comment_list[idx] = self._comment_list[idx].strip()
 
     def __get_next_comment(self):
         try:
             return next(self.iter_of_comment).strip()
         except StopIteration as e:
             return None
-        pass
 
     """
         对每一块注释，匹配特征符号（@，#，！等），调用
@@ -129,24 +125,51 @@ class AbstractParser:
         dependency_pat = re.compile("#:")
         header_pat = re.compile("!:")
         variable_pat = re.compile("v|Var:")
-
-        tasks = []
         while True:
             comment = self.__get_next_comment()
             if comment is None:
                 break
 
             if comment[0] == "#" and re.search(dependency_pat, comment):
-                tasks.append(self._thread_executor.submit(self._mapper.func_go,  "dep_pat", comment=comment + "\n",  path=target_file))
+                self._mapper.func_go("dep_pat", comment=comment + "\n", path=target_file)
             elif comment[0] == "!" and re.search(header_pat, comment):
-                tasks.append(self._thread_executor.submit(self._mapper.func_go, "header_pat", "desc_pat", comment=comment + "\n", path=target_file))
+                self._mapper.func_go("header_pat", "desc_pat", comment=comment + "\n", path=target_file)
             elif comment[0] == "&" and re.search(class_pat, comment) is not None:
-                tasks.append(self._thread_executor.submit(self._mapper.func_go, "class_name_pat", "desc_pat", "link_pat",comment=comment + "\n", path=target_file))
+                self._mapper.func_go("class_name_pat", "desc_pat", "link_pat", comment=comment + "\n", path=target_file)
             elif comment[0] == "@" and re.search(function_pat, comment) is not None:
-                tasks.append(self._thread_executor.submit(self._mapper.func_go, "func_name_pat", "in_param_pat", "out_param_pat","desc_pat", "link_pat", comment=comment + "\n",path=target_file))
+                self._mapper.func_go("func_name_pat", "in_param_pat", "out_param_pat", "desc_pat", "link_pat",
+                                     comment=comment + "\n", path=target_file)
             elif comment[:3].upper() == "VAR" and re.search(variable_pat, comment):
-                tasks.append(self._thread_executor.submit(self._mapper.func_go,"var_name_pat", "desc_pat","link_pat", comment=comment + "\n", path=target_file))
+                self._mapper.func_go("var_name_pat", "desc_pat", "link_pat", comment=comment + "\n", path=target_file)
             else:
                 logging.debug("capture a Non-doc comment")
-        for future in as_completed(tasks):
-            logging.info("task {} have finished".format(future))
+
+
+class BADiffCommentParser(AbstractParser):
+    def __gleft__(self, ps):
+        idx, l = -1, []
+        while True:
+            idx = ps.find(self._before.replace("\\", ""), idx + 1)
+            if idx == -1:
+                break
+            l.append(idx)
+        return l
+
+    def __gright__(self, ps):
+        idx, r = -1, []
+        while True:
+            idx = ps.find(self._after.replace("\\", ""), idx + 1)
+            if idx == -1:
+                break
+            r.append(idx)
+        return r
+
+    def pre_symmetric_check(self, page_content):
+        lc, rc = self.__gleft__(page_content), self.__gright__(page_content)
+        if len(lc) != len(rc):
+            return False
+        for left, right in zip(lc, rc):
+            if left > right:
+                return False
+
+        return True
