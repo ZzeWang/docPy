@@ -5,7 +5,7 @@ import re
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from loader.SingleLoader import SingleFileLoader
+from loader.SingleLoader import *
 from functional import AbstractSignalFunctional
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
@@ -21,7 +21,7 @@ class AbstractParser:
     def __init__(self, *args, **kwargs):
         self._before = r""
         self._after = r""
-        self.file = SingleFileLoader()
+
 
         if kwargs and kwargs["after"] and kwargs["before"]:
             self._after = kwargs["after"]
@@ -34,6 +34,11 @@ class AbstractParser:
         if kwargs and kwargs["mapper"]:
             if isinstance(kwargs["mapper"], AbstractSignalFunctional):
                 self._mapper = kwargs["mapper"]
+
+        self.file = SingleFileLoader()
+        if kwargs and kwargs["loader"]:
+            if isinstance(kwargs["loader"], FileLoader):
+                self.file = kwargs["loader"]
 
         if kwargs and kwargs["path"]:
             self.file.set_attr_by_path(kwargs["path"])
@@ -66,47 +71,44 @@ class AbstractParser:
     def pre_symmetric_check(self, page_content):
         return False
 
-    """
-        从每页中提取出一个完整的注释快，并保存到self._comment_list中
-        :param:void
-        :return:void
-    """
-
-    def parse_comment(self):
+    def parse_comments(self, who):
         page_c = 0
-        while page_c < len(self.file.pages):
-            not_page = self.pre_symmetric_check(self.file.pages[page_c])
+        while page_c < len(who.pages):
+            not_page = self.pre_symmetric_check(who.pages[page_c])
 
-            tmp = re.findall(self._comment_pattern, self.file.pages[page_c])
+            tmp = re.findall(self._comment_pattern, who.pages[page_c])
             for result in tmp:
                 self._comment_list.append(result)
                 logging.info("find a comment block with length={}".format(len(result)))
 
-            start = self.file.pages[page_c].rfind(self._before.replace("\\", ""))
+            start = who.pages[page_c].rfind(self._before.replace("\\", ""))
             if start == -1:
                 page_c += 1
                 continue
             org_line = page_c
             if not not_page:
                 while True:
-                    end = self.file.pages[page_c + 1].find(self._after.replace("\\", ""))
+                    end = who.pages[page_c + 1].find(self._after.replace("\\", ""))
                     page_c += 1
                     if end != -1:
                         break
-                base = self.file.pages[org_line][start + len(self._before.replace("\\", "")):]
+                base = who.pages[org_line][start + len(self._before.replace("\\", "")):]
                 org_line += 1
                 while org_line < page_c:
-                    base += self.file.pages[org_line]
+                    base += who.pages[org_line]
                     org_line += 1
 
-                self._comment_list.append(base + self.file.pages[page_c][:end])
+                self._comment_list.append(base + who.pages[page_c][:end])
             else:
                 page_c += 1
 
-            if page_c + 1 == len(self.file.pages):
+            if page_c + 1 == len(who.pages):
                 break
         for idx, item in enumerate(self._comment_list):
             self._comment_list[idx] = self._comment_list[idx].strip()
+
+    def parse_comment(self):
+        self.parse_comments(self.file)
 
     def __get_next_comment(self):
         try:
@@ -150,8 +152,9 @@ class BADiffCommentParser(AbstractParser):
     def __init__(self, *args, **kwargs):
         try:
             if kwargs["before"] == kwargs["after"]:
-                logging.error("BADiffCommentParser(aka BeforeAfterDifferentCommentParser) cannot parse the same beginning "
-                              "and ending signal.\nWith begin={} end={}".format(kwargs["before"], kwargs["before"]))
+                logging.error(
+                    "BADiffCommentParser(aka BeforeAfterDifferentCommentParser) cannot parse the same beginning "
+                    "and ending signal.\nWith begin={} end={}".format(kwargs["before"], kwargs["before"]))
                 raise TypeError
         except KeyError as e:
             logging.fatal(e)
