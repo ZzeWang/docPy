@@ -13,17 +13,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - CppParser - %(leve
 logger = logging.getLogger("CppParser")
 
 
-class HtmlParser(BADiffCommentParser):
-    def __init__(self, path):
-        super().__init__(before=r"<!--", after=r"-->", path=path, mapper=ToMarkdownSignalFunctional())
-        try:
-            self.parse_comment()
-        except Exception as e:
-            print(e)
-            logging.fatal("comment parse fail")
-        self.iter_of_comment = iter(self._comment_list)
-
-
 class CppParser(BADiffCommentParser):
     def __init__(self, path):
         super().__init__(before=r"\/\*", after=r"\*\/", path=path, mapper=ToMarkdownSignalFunctional())
