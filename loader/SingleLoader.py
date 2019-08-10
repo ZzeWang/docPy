@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class SingleFileLoader:
 
-    def __init__(self, limit=2*1024*1024):
+    def __init__(self, limit=1024*1024):
         self._file_path = ""
         self._file_format = ""  # .cpp, .hpp, .h, .py, .java, ...
         self._file_name = ""
@@ -31,10 +31,10 @@ class SingleFileLoader:
         self._file_path = path
         self._file_name = os.path.basename(path)
         self._file_format = os.path.splitext(path)[-1][1:]
-        assert self._file_format in ["cpp", "hpp", "h", "py", "java"]
+        assert self._file_format in ["cpp", "hpp", "h", "py", "java", "html"]
 
     def set_attr(self, path, name, format):
-        assert format in ["cpp", "hpp", "h", "py", "java"]
+        assert format in ["cpp", "hpp", "h", "py", "java", "html"]
 
         self._file_format = format
         self._file_name = name
