@@ -236,7 +236,7 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
             self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
             for var in self._module_set[md].variables:
                 if var.linked_to is self._module_set[md]:
-                    self.chunk += ToMarkdownSignalFunctional.H2 + " *Variable*  {}\n".format(var.name)
+                    self.chunk += ToMarkdownSignalFunctional.H2 + " *Variable*  {}: ({})\n".format(var.name, var.type)
                     self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(var.desc)
                     self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
             for func in self._module_set[md].functions:
@@ -246,6 +246,7 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
                         self.chunk += ToMarkdownSignalFunctional.H4 + "*param*  ({}) {}:\n".format(param[0], param[1])
                         self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(param[2])
                     self.chunk += ToMarkdownSignalFunctional.H4 + "*return*  {}\n".format(func.out_type)
+                    self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(func.desc)
                     self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
             for cls in self._module_set[md].classes:
                 self.chunk += ToMarkdownSignalFunctional.H2 + " *Class*  {}\n".format(cls.name)
@@ -259,5 +260,6 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
                         self.chunk += ToMarkdownSignalFunctional.H4 + "*param*  ({}) {}:\n".format(param[0], param[1])
                         self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(param[2])
                     self.chunk += ToMarkdownSignalFunctional.H4 + "*return* {}\n".format(method.out_type)
+                    self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(method.desc)
                     self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
         self.dump(self.chunk, r"E:\file\pyProj\docPy\test\targetfile")
