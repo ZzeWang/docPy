@@ -146,6 +146,17 @@ class AbstractParser:
 
 
 class BADiffCommentParser(AbstractParser):
+
+    def __init__(self, *args, **kwargs):
+        try:
+            if kwargs["before"] == kwargs["after"]:
+                logging.error("BADiffCommentParser(aka BeforeAfterDifferentCommentParser) cannot parse the same beginning "
+                              "and ending signal.\nWith begin={} end={}".format(kwargs["before"], kwargs["before"]))
+                raise TypeError
+        except KeyError as e:
+            logging.fatal(e)
+        super().__init__(*args, **kwargs)
+
     def __gleft__(self, ps):
         idx, l = -1, []
         while True:
