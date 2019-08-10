@@ -221,7 +221,7 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
     H3 = "### "
     H4 = "#### "
     Bar = " --- "
-    Desc = " \n "
+    Desc = "\n"
 
     def __init__(self):
         super().__init__()
@@ -232,29 +232,32 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
             md_name = self._module_set[md].name
             md_desc = self._module_set[md].desc
             self.chunk += ToMarkdownSignalFunctional.H1 + " *Modules* {}\n".format(md_name)
-            self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(md_desc)
+            self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(md_desc.strip())
             self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
             for var in self._module_set[md].variables:
                 if var.linked_to is self._module_set[md]:
                     self.chunk += ToMarkdownSignalFunctional.H2 + " *Variable*  {}\n".format(var.name)
-                    self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(var.desc)
+                    self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(var.desc)
                     self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
             for func in self._module_set[md].functions:
                 if func.linked_to is self._module_set[md]:
                     self.chunk += ToMarkdownSignalFunctional.H2 + "*Function*  {}\n".format(func.name)
                     for param in func.in_param:
                         self.chunk += ToMarkdownSignalFunctional.H4 + "*param*  ({}) {}:\n".format(param[0], param[1])
-                        self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n".format(param[2])
+                        self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(param[2])
                     self.chunk += ToMarkdownSignalFunctional.H4 + "*return*  {}\n".format(func.out_type)
+                    self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
             for cls in self._module_set[md].classes:
                 self.chunk += ToMarkdownSignalFunctional.H2 + " *Class*  {}\n".format(cls.name)
                 for var in cls.variables:
                     self.chunk += ToMarkdownSignalFunctional.H3 + " *var*  {}: *({})*\n".format(var.name, var.type)
-                    self.chunk += ToMarkdownSignalFunctional.Desc + " {}\n".format(var.desc)
+                    self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(var.desc)
+                    self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
                 for method in cls.methods:
                     self.chunk += ToMarkdownSignalFunctional.H3 + " *method*  {}\n".format(method.name)
                     for param in method.in_param:
                         self.chunk += ToMarkdownSignalFunctional.H4 + "*param*  ({}) {}:\n".format(param[0], param[1])
-                        self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n".format(param[2])
+                        self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(param[2])
                     self.chunk += ToMarkdownSignalFunctional.H4 + "*return* {}\n".format(method.out_type)
+                    self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
         self.dump(self.chunk, r"E:\file\pyProj\docPy\test\targetfile")
