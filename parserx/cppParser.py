@@ -3,7 +3,6 @@
 """
 import re, logging
 from .abstractParser import BADiffCommentParser
-from loader.SingleLoader import SingleFileLoader
 from functional import ToMarkdownSignalFunctional
 
 """
