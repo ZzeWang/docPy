@@ -9,9 +9,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - SingleFileLoader -
 logger = logging.getLogger(__name__)
 
 
-class SingleFileLoader:
+class FileLoader:
+    def load(self):
+        pass
 
-    def __init__(self, limit=1024*1024):
+    def set_attr_by_path(self, path):
+        pass
+
+    def set_attr(self,v1,v2,v3):
+        pass
+
+
+class SingleFileLoader(FileLoader):
+
+    def __init__(self, limit=100):
+        super().__init__()
         self._file_path = ""
         self._file_format = ""  # .cpp, .hpp, .h, .py, .java, ...
         self._file_name = ""
@@ -27,6 +39,7 @@ class SingleFileLoader:
         :param format : 文件格式
         :return : void
     """
+
     def set_attr_by_path(self, path):
         self._file_path = path
         self._file_name = os.path.basename(path)
@@ -47,13 +60,14 @@ class SingleFileLoader:
         :param:void
         :return :void
     """
+
     def load(self):
         assert self._file_path
         assert self._file_name
 
         try:
             file_size = os.path.getsize(self._file_path)
-            logging.info("open file with size={}, aka {}MB".format(file_size, file_size / self.limitation))
+            logging.info("open file '{}' with size={}, aka {}MB".format(self._file_name, file_size, file_size / self.limitation))
             if file_size > self.limitation:  # if source code file's size bigger than 1MB
 
                 with open(self._file_path, "r", encoding="utf8") as target:
