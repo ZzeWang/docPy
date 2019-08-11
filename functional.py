@@ -1,7 +1,7 @@
 """
     dependency
 """
-import re
+import re, abc
 from threading import Lock, Thread
 import logging
 
@@ -10,22 +10,24 @@ logger = logging.getLogger(__name__)
 
 
 class BasedObject:
+    __module__ = abc.ABCMeta
+
     def __init__(self, name):
         self.name = name
         self.desc = ""
         self.linked_to = None
 
+    def add_parent(self, parent):
+        pass
 
-class DependencyObject(BasedObject):
-    def __init__(self, name):
-        super().__init__(name)
-        self.deps = []
-
-
-class VariableObject(BasedObject):
-    def __init__(self, name):
-        super().__init__(name)
-        self.type = None
+    def add_child(self, child):
+        """
+        !! IMPORTANT
+        child node must point to parent while adding a child node of this
+        :param child:
+        :return:
+        """
+        pass
 
 
 class ModuleObject(BasedObject):
@@ -35,14 +37,21 @@ class ModuleObject(BasedObject):
         self.variables = []
         self.functions = []
 
+    def add_parent(self, parent: BasedObject):
+        pass  #
 
-class FunctionObject(BasedObject):
-    def __init__(self, name):
-        super().__init__(name)
-        self.its_class = None
-        self.its_module = None
-        self.in_param = []
-        self.out_type = ""
+    def add_child(self, child: BasedObject):
+        try:
+            isinstance(child, (ClassObject, ModuleVariableObject, ModuleFunctionObject))
+        except ValueError:
+            return
+        child.add_parent(self)  # auto link to parent while adding child
+        if isinstance(child, ClassObject):
+            self.classes.append(child)
+        elif isinstance(child, ModuleVariableObject):
+            self.variables.append(child)
+        elif isinstance(child, ModuleFunctionObject):
+            self.functions.append(child)
 
 
 class ClassObject(BasedObject):
@@ -50,6 +59,122 @@ class ClassObject(BasedObject):
         super().__init__(name)
         self.methods = []
         self.variables = []
+        self.linked_to = []
+
+    def add_parent(self, parent: ModuleObject):
+        assert isinstance(parent, ModuleObject)
+        self.linked_to.append(parent)
+        #  parent.add_child(self) !
+        #  !!important this is illegal, because when adding a relations, the parent will add
+        # this child automatically by calling parent.add_child() in your code and doing this by yourself!
+
+    def add_child(self, child: BasedObject):
+
+        try:
+            isinstance(child, (MemberVariableObject, ClassMethodObject))
+        except ValueError:
+            return
+
+        child.add_parent(self)
+        if isinstance(child, MemberVariableObject):
+            self.variables.append(child)
+        elif isinstance(child, ClassMethodObject):
+            self.methods.append(child)
+
+
+class DependencyObject(BasedObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.deps = []
+
+
+class VariableObject(BasedObject):
+    __module__ = abc.ABCMeta
+
+    def __init__(self, name):
+        super().__init__(name)
+        self.type = None
+
+    def add_child(self, child):
+        logging.error("variable object have no child!")
+        raise TypeError
+
+
+class MemberVariableObject(VariableObject):
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.linked_to = None  # must be a class object
+
+    def add_parent(self, parent: ClassObject):
+        try:
+            assert isinstance(parent, ClassObject)
+        except ValueError:
+            return
+        self.linked_to = parent
+        # parent.variables.append(self)
+        #  !!important this is illegal, because when adding a relations, the parent will add
+        # this child automatically by calling parent.add_child() in your code and doing this by yourself!
+
+
+class ModuleVariableObject(VariableObject):
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.linked_to = []  # a variable defined in a module may be used in other module
+
+    def add_parent(self, parent: ModuleObject):
+        try:
+            assert isinstance(parent, ModuleObject)
+        except ValueError:
+            return
+        self.linked_to.append(parent)
+        # parent.variables.append(self)
+        #  !!important this is illegal, because when adding a relations, the parent will add
+        # this child automatically by calling parent.add_child() in your code and doing this by yourself!
+
+
+class FunctionObject(BasedObject):
+    __module__ = abc.ABCMeta
+
+    def __init__(self, name):
+        super().__init__(name)
+        self.in_param = []
+        self.out_type = ""
+
+    def add_child(self, child):
+        logging.error("function object have no child!")
+        raise TypeError
+
+
+class ModuleFunctionObject(FunctionObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.linked_to = []
+
+    def add_parent(self, parent: ModuleObject):
+        try:
+            assert isinstance(parent, ModuleObject)
+        except ValueError:
+            return
+        self.linked_to.append(parent)
+        # parent.add_child(self)
+        #  !!important this is illegal, because when adding a relations, the parent will add
+        # this child automatically by calling parent.add_child() in your code and doing this by yourself!
+
+
+class ClassMethodObject(FunctionObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.linked_to = None
+
+    def add_parent(self, parent: ClassObject):
+        try:
+            assert isinstance(parent, ClassObject)
+        except ValueError:
+            return
+        self.linked_to = parent
+        # parent.add_child(self)
+        #  !!important this is illegal, because when adding a relations, the parent will add
+        # this child automatically by calling parent.add_child() in your code and doing this by yourself!
 
 
 class AbstractSignalFunctional(object):
@@ -75,6 +200,10 @@ class AbstractSignalFunctional(object):
         self._header_set = {}
         self._function_set = {}
         self._unresolved_relations = {}
+        self._obj_set = {
+
+            # name: []
+        }
 
     def combine_to_tuple(self, key: str, string: str):
         for single in re.findall(self._patterns[key], string):
@@ -86,22 +215,55 @@ class AbstractSignalFunctional(object):
     def __break_down(self, sp: str) -> tuple:
         return sp[:sp.find(":")].strip().upper(), [i.strip() for i in sp[sp.find(":") + 1:].split(",")]
 
+    def __link(self, tgt, parents):
+        for parent in parents:
+            try:
+                if len(self._obj_set[parent]) == 1:
+                    self._obj_set[parent][0].add_child(tgt)
+                    logging.info(
+                        "link '{}' (type={})-> '{}' (type={})".format(tgt.name, tgt.__class__.__name__,
+                                                                      self._obj_set[parent][0].name,
+                                                                      self._obj_set[parent][0].__class__.__name__))
+                else:
+                    for sub in self._obj_set[parent]:
+                        try:
+                            sub.add_child(tgt)
+                            logging.info(
+                                "link '{}' (type='{}') -> '{}' (type={})".format(tgt.name, tgt.__class__.__name__,
+                                                                                 sub.name,
+                                                                                 sub.__class__.__name__))
+                            break
+                        except ValueError:
+                            return
+                        except TypeError as e:
+                            return
+                        except Exception as e:
+                            logging.fatal(e)
+            except KeyError as e:
+                self._unresolved_relations[tgt] = ModuleObject(parent)
+        pass
+
     def link(self, tgt, parents):
         type, pts = self.__break_down(parents)
         if isinstance(tgt, ModuleObject):
-            logging.info("{} module do not necessary to have a parent.".format(tgt.name))
-            return False
+            for parent in pts:
+                if type == "M":
+                    pass
+                elif type == "LK":
+                    pass
+                logging.info("{} module do not necessary to have a parent.".format(tgt.name))
         if isinstance(tgt, ClassObject):
             for parent in pts:
-                try:
-                    self._module_set[parent].classes.append(tgt)
-                    tgt.linked_to = self._module_set[parent]
-                    logging.info("link class '{}' -> module '{}'".format(tgt.name, parent))
-                except KeyError as e:
-                    self._unresolved_relations[tgt] = ModuleObject(parent)
-                    logging.info("unresolved relation between class '{}' -> module ''{}.".format(tgt.name, parent))
-                    return False
-            return True
+                if type == "M":
+                    try:
+                        self._module_set[parent].classes.append(tgt)
+                        tgt.linked_to = self._module_set[parent]
+                        logging.info("link class '{}' -> module '{}'".format(tgt.name, parent))
+                    except KeyError as e:
+                        self._unresolved_relations[tgt] = ModuleObject(parent)
+                        logging.info("unresolved relation between class '{}' -> module ''{}.".format(tgt.name, parent))
+                else:
+                    pass
         if isinstance(tgt, FunctionObject):
             for parent in pts:
                 if type == "M":
@@ -123,8 +285,6 @@ class AbstractSignalFunctional(object):
                             "unresolved relation between function '{}' -> module ''{}.".format(tgt.name, parent))
                 else:
                     logging.error("suffix may be error, with suffix='{}'".format(type))
-                    return False
-            return True
         if isinstance(tgt, VariableObject):
             for parent in pts:
                 if type == "M":
@@ -147,9 +307,6 @@ class AbstractSignalFunctional(object):
                             "unresolved relation between variable '{}' -> module ''{}.".format(tgt.name, parent))
                 else:
                     logging.error("suffix may be error, with suffix={}(type)".format(type))
-                    return False
-                return False
-            return True
 
     def link2(self):
         for tgt in self._unresolved_relations.keys():
@@ -190,49 +347,68 @@ class AbstractSignalFunctional(object):
 
                 continue
 
+    def __add_obj(self, name, obj):
+        try:
+            self._obj_set[name].append(obj)
+        except KeyError:
+            self._obj_set[name] = [obj]
+
     def func_go(self, *args, **kwargs):
-        global target
+        global target, name, func_in_param_list, func_out_param
+        clx = ""
         desc = ""
+        func_in_param_list = []
+        func_out_param = ""
         for oi in args:
             try:
                 result = self.combine_to_tuple(oi, kwargs["comment"])
                 while True:
                     try:
                         # TODO refactor
-                        tx = next(result)
+                        result_tuple = next(result)
                         if oi == "class_name_pat":
-                            cls = ClassObject(tx[0])
-                            self._class_set[tx[0]] = cls
-                            target = cls
+                            target = ClassObject(result_tuple[0])
+                            self.__add_obj(target.name, target)
                             logging.info("create a new class '{}'".format(target.name))
                         elif oi == "func_name_pat":
-                            func = FunctionObject(tx[0])
-                            self._function_set[tx[0]] = func
-                            target = func
-                            logging.info("create a new function '{}'".format(target.name))
+                            # delay until link
+                            name = result_tuple
+                            clx = "func"
                         elif oi == "var_name_pat":
-                            var = VariableObject(tx[1])
-                            var.type = tx[0]
-                            self._variable_set[tx[0]] = var
-                            target = var
-                            logging.info("create a new variable '{}'".format(target.name))
+                            # delay until link
+                            name = result_tuple
+                            clx = "var"
                         elif oi == "header_pat":
-                            m = ModuleObject(tx[0])
-                            self._module_set[tx[0]] = m
-                            target = m
+                            target = ModuleObject(result_tuple[0])
+                            self.__add_obj(target.name, target)
                             logging.info("create a new module '{}'".format(target.name))
                         elif oi == "desc_pat":
-                            desc += tx[0]
+                            desc += result_tuple[0]
                         elif oi == "link_pat":
-                            self.link(target, tx[0])  # tx(parent) <- target
+                            type, parents = self.__break_down(result_tuple[0])
+                            if clx == "func":
+                                if type == "M":
+                                    target = ClassMethodObject(name[0])
+                                elif type == "LK":
+                                    target = ModuleFunctionObject(name[0])
+                                target.in_param.extend(func_in_param_list)
+                                target.out_type = func_out_param
+                                self.__add_obj(target.name, target)
+                                logging.info("create a new function '{}'".format(target.name))
+                            elif clx == "var":
+                                if type == "M":
+                                    target = MemberVariableObject(name[1])
+                                elif type == "LK":
+                                    target = ModuleVariableObject(name[1])
+                                target.type = name[0]
+                                self.__add_obj(target.name, target)
+                                logging.info("create a new variable '{}'".format(target.name))
+                            self.__link(target, parents)  # result_tuple(parent) <- target
+                            clx = ""
                         elif oi == "in_param_pat":
-                            target.in_param.append(tx)
-                            logging.info(
-                                "create a new function input param '{}' type={}, desc={}".format(tx[1], tx[0], tx[2]))
+                            func_in_param_list.append(result_tuple)
                         elif oi == "out_param_pat":
-                            target.out_type = tx[0]
-                            logging.info(
-                                "create a new function output param type={}".format(tx[0]))
+                            func_out_param = result_tuple[0]
                         else:
                             break
                     except StopIteration:
@@ -240,6 +416,58 @@ class AbstractSignalFunctional(object):
             except KeyError as e:
                 logging.fatal(e)
         target.desc = desc
+
+    #
+    # def func_go(self, *args, **kwargs):
+    #     global target
+    #     desc = ""
+    #     for oi in args:
+    #         try:
+    #             result = self.combine_to_tuple(oi, kwargs["comment"])
+    #             while True:
+    #                 try:
+    #                     # TODO refactor
+    #                     tx = next(result)
+    #                     if oi == "class_name_pat":
+    #                         cls = ClassObject(tx[0])
+    #                         self._class_set[tx[0]] = cls
+    #                         target = cls
+    #                         logging.info("create a new class '{}'".format(target.name))
+    #                     elif oi == "func_name_pat":
+    #                         func = FunctionObject(tx[0])
+    #                         self._function_set[tx[0]] = func
+    #                         target = func
+    #                         logging.info("create a new function '{}'".format(target.name))
+    #                     elif oi == "var_name_pat":
+    #                         var = VariableObject(tx[1])
+    #                         var.type = tx[0]
+    #                         self._variable_set[tx[0]] = var
+    #                         target = var
+    #                         logging.info("create a new variable '{}'".format(target.name))
+    #                     elif oi == "header_pat":
+    #                         m = ModuleObject(tx[0])
+    #                         self._module_set[tx[0]] = m
+    #                         target = m
+    #                         logging.info("create a new module '{}'".format(target.name))
+    #                     elif oi == "desc_pat":
+    #                         desc += tx[0]
+    #                     elif oi == "link_pat":
+    #                         self.link(target, tx[0])  # tx(parent) <- target
+    #                     elif oi == "in_param_pat":
+    #                         target.in_param.append(tx)
+    #                         logging.info(
+    #                             "create a new function input param '{}' type={}, desc={}".format(tx[1], tx[0], tx[2]))
+    #                     elif oi == "out_param_pat":
+    #                         target.out_type = tx[0]
+    #                         logging.info(
+    #                             "create a new function output param type={}".format(tx[0]))
+    #                     else:
+    #                         break
+    #                 except StopIteration:
+    #                     break
+    #         except KeyError as e:
+    #             logging.fatal(e)
+    #     target.desc = desc
 
     def dump(self, info, path):
         pass
