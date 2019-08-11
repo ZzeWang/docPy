@@ -28,7 +28,6 @@ class VariableObject(BasedObject):
         self.type = None
 
 
-
 class ModuleObject(BasedObject):
     def __init__(self, name):
         super().__init__(name)
@@ -75,6 +74,7 @@ class AbstractSignalFunctional(object):
         self._variable_set = {}
         self._header_set = {}
         self._function_set = {}
+        self._unresolved_relations = {}
 
     def combine_to_tuple(self, key: str, string: str):
         for single in re.findall(self._patterns[key], string):
@@ -88,65 +88,107 @@ class AbstractSignalFunctional(object):
 
     def link(self, tgt, parents):
         type, pts = self.__break_down(parents)
-
         if isinstance(tgt, ModuleObject):
             logging.info("{} module do not necessary to have a parent.".format(tgt.name))
             return False
-
         if isinstance(tgt, ClassObject):
             for parent in pts:
-                # TODO when parent do not exits
                 try:
                     self._module_set[parent].classes.append(tgt)
                     tgt.linked_to = self._module_set[parent]
                     logging.info("link class '{}' -> module '{}'".format(tgt.name, parent))
                 except KeyError as e:
-                    logging.error("class '{}' do not exists or have not been created.".format(parent))
+                    self._unresolved_relations[tgt] = ModuleObject(parent)
+                    logging.info("unresolved relation between class '{}' -> module ''{}.".format(tgt.name, parent))
                     return False
             return True
-
         if isinstance(tgt, FunctionObject):
             for parent in pts:
-                # TODO when parent do not exits
-
                 if type == "M":
                     try:
                         self._class_set[parent].methods.append(tgt)
                         tgt.linked_to = self._class_set[parent]
                         logging.info("link function '{}' -> class '{}'".format(tgt.name, parent))
                     except KeyError:
-                        logging.error("class '{}' do not exists or have not been created.".format(parent))
+                        self._unresolved_relations[tgt] = ClassObject(parent)
+                        logging.info("unresolved relation between method '{}' -> class ''{}.".format(tgt.name, parent))
                 elif type == "LK":
                     try:
                         self._module_set[parent].functions.append(tgt)
                         tgt.linked_to = self._module_set[parent]
                         logging.info("link function '{}' -> module '{}'".format(tgt.name, parent))
                     except KeyError:
-                        logging.error("module '{}' do not exists or have not been created.".format(parent))
+                        self._unresolved_relations[tgt] = ModuleObject(parent)
+                        logging.info(
+                            "unresolved relation between function '{}' -> module ''{}.".format(tgt.name, parent))
                 else:
-                    logging.error("suffix may be error, with suffix={}(type)".format(type))
+                    logging.error("suffix may be error, with suffix='{}'".format(type))
                     return False
-
             return True
         if isinstance(tgt, VariableObject):
             for parent in pts:
-                # TODO when parent do not exits
-                try:
-                    if type == "M":
+                if type == "M":
+                    try:
                         self._class_set[parent].variables.append(tgt)
                         tgt.linked_to = self._class_set[parent]
                         logging.info("link variable '{}' -> class '{}'".format(tgt.name, parent))
-                    elif type == "LK":
+                    except KeyError:
+                        self._unresolved_relations[tgt] = ClassObject(parent)
+                        logging.info(
+                            "unresolved relation between variable '{}' -> class ''{}.".format(tgt.name, parent))
+                elif type == "LK":
+                    try:
                         self._module_set[parent].variables.append(tgt)
                         tgt.linked_to = self._module_set[parent]
                         logging.info("link variable '{}' -> module '{}'".format(tgt.name, parent))
-                    else:
-                        logging.error("suffix may be error, with suffix={}(type)".format(type))
-                        return False
-                except KeyError as e:
-                    logging.error("class or module '{}' do not exists or have not been created.".format(parent))
+                    except KeyError:
+                        self._unresolved_relations[tgt] = ModuleObject(parent)
+                        logging.info(
+                            "unresolved relation between variable '{}' -> module ''{}.".format(tgt.name, parent))
+                else:
+                    logging.error("suffix may be error, with suffix={}(type)".format(type))
                     return False
+                return False
             return True
+
+    def link2(self):
+        for tgt in self._unresolved_relations.keys():
+            faker_parent = self._unresolved_relations[tgt]
+
+            if isinstance(tgt, ClassObject):
+                if faker_parent.name in self._module_set.keys():
+                    self._module_set[faker_parent.name].classes.append(tgt)
+                    logging.info("resolve a relation class '{}' -> module '{}'".format(tgt.name, faker_parent.name))
+                    continue
+                else:
+                    logging.error("unresolved relations happened! class : {}'s Parent '{}' isn't a module"
+                                  "\nclass '{}' no where to be linked!".format(tgt.name, faker_parent.name, tgt.name))
+            if isinstance(tgt, VariableObject):
+                if isinstance(faker_parent, ClassObject) and faker_parent.name in self._class_set.keys():
+                    self._class_set[faker_parent.name].variables.append(tgt)
+                    logging.info("resolve a relation variable '{}' -> class '{}'".format(tgt.name, faker_parent.name))
+                elif isinstance(faker_parent, ModuleObject) and faker_parent.name in self._module_set.keys():
+                    self._module_set[faker_parent.name].variables.append(tgt)
+                    logging.info("resolve a relation variable '{}' -> module '{}'".format(tgt.name, faker_parent.name))
+                else:
+                    logging.error(
+                        "unresolved relations happened! variable : {}'s Parent '{}' neither is a module or a class"
+                        "\nvariable '{}' no where to be linked!".format(tgt.name, faker_parent.name, tgt.name))
+
+            if isinstance(tgt, FunctionObject):
+                if isinstance(faker_parent, ClassObject) and faker_parent.name in self._class_set.keys():
+                    self._class_set[faker_parent.name].methods.append(tgt)
+                    logging.info("resolve a relation method '{}' -> class '{}'".format(tgt.name, faker_parent.name))
+                elif isinstance(faker_parent, ModuleObject) and faker_parent.name in self._module_set.keys():
+                    self._module_set[faker_parent.name].functions.append(tgt)
+                    logging.info("resolve a  relation function '{}' -> module '{}'".format(tgt.name, faker_parent.name))
+
+                else:
+                    logging.error(
+                        "unresolved relations happened! function : {}'s Parent '{}' neither is a module or a class"
+                        "\nfunction '{}' no where to be linked!".format(tgt.name, faker_parent.name, tgt.name))
+
+                continue
 
     def func_go(self, *args, **kwargs):
         global target
