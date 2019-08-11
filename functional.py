@@ -20,6 +20,9 @@ class BasedObject:
     def add_parent(self, parent):
         pass
 
+    def travel(self):
+        return None
+
     def add_child(self, child):
         """
         !! IMPORTANT
@@ -36,6 +39,16 @@ class ModuleObject(BasedObject):
         self.classes = []
         self.variables = []
         self.functions = []
+
+    def travel(self):
+        for cls in self.classes:
+            yield cls
+
+        for var in self.variables:
+            yield var
+
+        for func in self.functions:
+            yield func
 
     def add_parent(self, parent: BasedObject):
         pass  #
@@ -60,6 +73,13 @@ class ClassObject(BasedObject):
         self.methods = []
         self.variables = []
         self.linked_to = []
+
+    def travel(self):
+        for md in self.methods:
+            yield md
+
+        for var in self.variables:
+            yield var
 
     def add_parent(self, parent: ModuleObject):
         assert isinstance(parent, ModuleObject)
@@ -194,18 +214,13 @@ class AbstractSignalFunctional(object):
             "link_pat": re.compile(" (?:(?:[ToOt]+)|(?:[LKk]+)|(?:[Mm])): *.*? *\n")
         }
 
-        self._class_set = {}
-        self._module_set = {}
-        self._variable_set = {}
-        self._header_set = {}
-        self._function_set = {}
         self._unresolved_relations = {}
         self._obj_set = {
 
             # name: []
         }
 
-    def combine_to_tuple(self, key: str, string: str):
+    def __combine_to_tuple(self, key: str, string: str):
         for single in re.findall(self._patterns[key], string):
             if isinstance(single, tuple):
                 yield single
@@ -215,143 +230,59 @@ class AbstractSignalFunctional(object):
     def __break_down(self, sp: str) -> tuple:
         return sp[:sp.find(":")].strip().upper(), [i.strip() for i in sp[sp.find(":") + 1:].split(",")]
 
-    def __link(self, tgt, parents):
-        for parent in parents:
-            try:
-                if len(self._obj_set[parent]) == 1:
-                    self._obj_set[parent][0].add_child(tgt)
-                    logging.info(
-                        "link '{}' (type={})-> '{}' (type={})".format(tgt.name, tgt.__class__.__name__,
-                                                                      self._obj_set[parent][0].name,
-                                                                      self._obj_set[parent][0].__class__.__name__))
-                else:
-                    for sub in self._obj_set[parent]:
-                        try:
-                            sub.add_child(tgt)
-                            logging.info(
-                                "link '{}' (type='{}') -> '{}' (type={})".format(tgt.name, tgt.__class__.__name__,
-                                                                                 sub.name,
-                                                                                 sub.__class__.__name__))
-                            break
-                        except ValueError:
-                            return
-                        except TypeError as e:
-                            return
-                        except Exception as e:
-                            logging.fatal(e)
-            except KeyError as e:
-                self._unresolved_relations[tgt] = ModuleObject(parent)
-        pass
-
-    def link(self, tgt, parents):
-        type, pts = self.__break_down(parents)
-        if isinstance(tgt, ModuleObject):
-            for parent in pts:
-                if type == "M":
-                    pass
-                elif type == "LK":
-                    pass
-                logging.info("{} module do not necessary to have a parent.".format(tgt.name))
-        if isinstance(tgt, ClassObject):
-            for parent in pts:
-                if type == "M":
+    def __find_parent_to_add_tgt(self, tgt, parent, header):
+        try:
+            if len(self._obj_set[parent]) == 1:
+                self._obj_set[parent][0].add_child(tgt)
+                logging.info(
+                    "{} link '{}' (type='{}') -> '{}' (type={})".format(header, tgt.name, tgt.__class__.__name__,
+                                                                        self._obj_set[parent][0].name,
+                                                                        self._obj_set[parent][0].__class__.__name__))
+            else:
+                for sub in self._obj_set[parent]:
                     try:
-                        self._module_set[parent].classes.append(tgt)
-                        tgt.linked_to = self._module_set[parent]
-                        logging.info("link class '{}' -> module '{}'".format(tgt.name, parent))
-                    except KeyError as e:
-                        self._unresolved_relations[tgt] = ModuleObject(parent)
-                        logging.info("unresolved relation between class '{}' -> module ''{}.".format(tgt.name, parent))
-                else:
-                    pass
-        if isinstance(tgt, FunctionObject):
-            for parent in pts:
-                if type == "M":
-                    try:
-                        self._class_set[parent].methods.append(tgt)
-                        tgt.linked_to = self._class_set[parent]
-                        logging.info("link function '{}' -> class '{}'".format(tgt.name, parent))
-                    except KeyError:
-                        self._unresolved_relations[tgt] = ClassObject(parent)
-                        logging.info("unresolved relation between method '{}' -> class ''{}.".format(tgt.name, parent))
-                elif type == "LK":
-                    try:
-                        self._module_set[parent].functions.append(tgt)
-                        tgt.linked_to = self._module_set[parent]
-                        logging.info("link function '{}' -> module '{}'".format(tgt.name, parent))
-                    except KeyError:
-                        self._unresolved_relations[tgt] = ModuleObject(parent)
+                        sub.add_child(tgt)
                         logging.info(
-                            "unresolved relation between function '{}' -> module ''{}.".format(tgt.name, parent))
-                else:
-                    logging.error("suffix may be error, with suffix='{}'".format(type))
-        if isinstance(tgt, VariableObject):
-            for parent in pts:
-                if type == "M":
-                    try:
-                        self._class_set[parent].variables.append(tgt)
-                        tgt.linked_to = self._class_set[parent]
-                        logging.info("link variable '{}' -> class '{}'".format(tgt.name, parent))
-                    except KeyError:
-                        self._unresolved_relations[tgt] = ClassObject(parent)
-                        logging.info(
-                            "unresolved relation between variable '{}' -> class ''{}.".format(tgt.name, parent))
-                elif type == "LK":
-                    try:
-                        self._module_set[parent].variables.append(tgt)
-                        tgt.linked_to = self._module_set[parent]
-                        logging.info("link variable '{}' -> module '{}'".format(tgt.name, parent))
-                    except KeyError:
-                        self._unresolved_relations[tgt] = ModuleObject(parent)
-                        logging.info(
-                            "unresolved relation between variable '{}' -> module ''{}.".format(tgt.name, parent))
-                else:
-                    logging.error("suffix may be error, with suffix={}(type)".format(type))
-
-    def link2(self):
-        for tgt in self._unresolved_relations.keys():
-            faker_parent = self._unresolved_relations[tgt]
-
-            if isinstance(tgt, ClassObject):
-                if faker_parent.name in self._module_set.keys():
-                    self._module_set[faker_parent.name].classes.append(tgt)
-                    logging.info("resolve a relation class '{}' -> module '{}'".format(tgt.name, faker_parent.name))
-                    continue
-                else:
-                    logging.error("unresolved relations happened! class : {}'s Parent '{}' isn't a module"
-                                  "\nclass '{}' no where to be linked!".format(tgt.name, faker_parent.name, tgt.name))
-            if isinstance(tgt, VariableObject):
-                if isinstance(faker_parent, ClassObject) and faker_parent.name in self._class_set.keys():
-                    self._class_set[faker_parent.name].variables.append(tgt)
-                    logging.info("resolve a relation variable '{}' -> class '{}'".format(tgt.name, faker_parent.name))
-                elif isinstance(faker_parent, ModuleObject) and faker_parent.name in self._module_set.keys():
-                    self._module_set[faker_parent.name].variables.append(tgt)
-                    logging.info("resolve a relation variable '{}' -> module '{}'".format(tgt.name, faker_parent.name))
-                else:
-                    logging.error(
-                        "unresolved relations happened! variable : {}'s Parent '{}' neither is a module or a class"
-                        "\nvariable '{}' no where to be linked!".format(tgt.name, faker_parent.name, tgt.name))
-
-            if isinstance(tgt, FunctionObject):
-                if isinstance(faker_parent, ClassObject) and faker_parent.name in self._class_set.keys():
-                    self._class_set[faker_parent.name].methods.append(tgt)
-                    logging.info("resolve a relation method '{}' -> class '{}'".format(tgt.name, faker_parent.name))
-                elif isinstance(faker_parent, ModuleObject) and faker_parent.name in self._module_set.keys():
-                    self._module_set[faker_parent.name].functions.append(tgt)
-                    logging.info("resolve a  relation function '{}' -> module '{}'".format(tgt.name, faker_parent.name))
-
-                else:
-                    logging.error(
-                        "unresolved relations happened! function : {}'s Parent '{}' neither is a module or a class"
-                        "\nfunction '{}' no where to be linked!".format(tgt.name, faker_parent.name, tgt.name))
-
-                continue
+                            "link '{}' (type='{}') -> '{}' (type={})".format(tgt.name, tgt.__class__.__name__,
+                                                                             sub.name,
+                                                                             sub.__class__.__name__))
+                        break
+                    except ValueError:
+                        return
+                    except TypeError as e:
+                        return
+                    except Exception as e:
+                        logging.fatal(e)
+        except KeyError:
+            raise KeyError
 
     def __add_obj(self, name, obj):
         try:
             self._obj_set[name].append(obj)
         except KeyError:
             self._obj_set[name] = [obj]
+
+    def link(self, tgt, parents):
+        for parent in parents:
+            try:
+                self.__find_parent_to_add_tgt(tgt, parent, "")
+            except KeyError:
+                if isinstance(tgt.linked_to, list):
+                    try:
+                        self._unresolved_relations[tgt].append(parent)
+                    except KeyError:
+                        self._unresolved_relations[tgt] = [parent]
+                    logging.info("unresolved link: '{}' "
+                                 "(type={}) -> '{}' (type=unknown)".format(tgt.name, tgt.__class__.__name__, parent))
+
+    def link2(self):
+        for tgt in self._unresolved_relations.keys():
+            for parent in self._unresolved_relations[tgt]:
+                try:
+                    self.__find_parent_to_add_tgt(tgt, parent, "resolve")
+                except KeyError:
+                    logging.error(
+                        "unresolved relations happened!  {}' -> '{}' . '{}' not find!".format(tgt.name, parent, parent))
 
     def func_go(self, *args, **kwargs):
         global target, name, func_in_param_list, func_out_param
@@ -361,7 +292,7 @@ class AbstractSignalFunctional(object):
         func_out_param = ""
         for oi in args:
             try:
-                result = self.combine_to_tuple(oi, kwargs["comment"])
+                result = self.__combine_to_tuple(oi, kwargs["comment"])
                 while True:
                     try:
                         # TODO refactor
@@ -403,7 +334,7 @@ class AbstractSignalFunctional(object):
                                 target.type = name[0]
                                 self.__add_obj(target.name, target)
                                 logging.info("create a new variable '{}'".format(target.name))
-                            self.__link(target, parents)  # result_tuple(parent) <- target
+                            self.link(target, parents)  # result_tuple(parent) <- target
                             clx = ""
                         elif oi == "in_param_pat":
                             func_in_param_list.append(result_tuple)
@@ -446,38 +377,19 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
         self.chunk = ""
 
     def markdown_format(self):
-        for md in self._module_set.keys():
-            md_name = self._module_set[md].name
-            md_desc = self._module_set[md].desc
-            self.chunk += ToMarkdownSignalFunctional.H1 + " *Modules* {}\n".format(md_name)
-            self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(md_desc.strip())
-            self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
-            for var in self._module_set[md].variables:
-                if var.linked_to is self._module_set[md]:
-                    self.chunk += ToMarkdownSignalFunctional.H2 + " *Variable*  {}: ({})\n".format(var.name, var.type)
-                    self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(var.desc)
-                    self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
-            for func in self._module_set[md].functions:
-                if func.linked_to is self._module_set[md]:
-                    self.chunk += ToMarkdownSignalFunctional.H2 + "*Function*  {}\n".format(func.name)
-                    for param in func.in_param:
-                        self.chunk += ToMarkdownSignalFunctional.H4 + "*param*  ({}) {}:\n".format(param[0], param[1])
-                        self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(param[2])
-                    self.chunk += ToMarkdownSignalFunctional.H4 + "*return*  {}\n".format(func.out_type)
-                    self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(func.desc)
-                    self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
-            for cls in self._module_set[md].classes:
-                self.chunk += ToMarkdownSignalFunctional.H2 + " *Class*  {}\n".format(cls.name)
-                for var in cls.variables:
-                    self.chunk += ToMarkdownSignalFunctional.H3 + " *var*  {}: *({})*\n".format(var.name, var.type)
-                    self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(var.desc)
-                    self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
-                for method in cls.methods:
-                    self.chunk += ToMarkdownSignalFunctional.H3 + " *method*  {}\n".format(method.name)
-                    for param in method.in_param:
-                        self.chunk += ToMarkdownSignalFunctional.H4 + "*param*  ({}) {}:\n".format(param[0], param[1])
-                        self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(param[2])
-                    self.chunk += ToMarkdownSignalFunctional.H4 + "*return* {}\n".format(method.out_type)
-                    self.chunk += ToMarkdownSignalFunctional.Desc + "{}\n\n".format(method.desc)
-                    self.chunk += ToMarkdownSignalFunctional.Bar + " \n"
-        self.dump(self.chunk, r"E:\file\pyProj\docPy\test\targetfile")
+        mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
+        for mod in mods:
+            while True:
+                try:
+                    obj = next(mod.travel())
+                    if isinstance(obj, ClassObject):
+                        print("class :"+obj.name)
+                        continue
+                    if isinstance(obj, ModuleFunctionObject):
+                        print("function: "+ obj.name)
+                        continue
+                    if isinstance(obj, ModuleVariableObject):
+                        print("variable: "+ obj.name)
+                        continue
+                except StopIteration:
+                    break

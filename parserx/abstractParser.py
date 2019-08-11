@@ -22,7 +22,6 @@ class AbstractParser:
         self._before = r""
         self._after = r""
 
-
         if kwargs and kwargs["after"] and kwargs["before"]:
             self._after = kwargs["after"]
             self._before = kwargs["before"]
@@ -35,7 +34,7 @@ class AbstractParser:
             if isinstance(kwargs["mapper"], AbstractSignalFunctional):
                 self._mapper = kwargs["mapper"]
 
-        self.file = SingleFileLoader()
+        self.file = FileLoader()
         if kwargs and kwargs["loader"]:
             if isinstance(kwargs["loader"], FileLoader):
                 self.file = kwargs["loader"]
@@ -143,8 +142,10 @@ class AbstractParser:
                                      comment=comment + "\n", path=target_file)
             elif comment[:3].upper() == "VAR" and re.search(variable_pat, comment):
                 self._mapper.func_go("var_name_pat", "desc_pat", "link_pat", comment=comment + "\n", path=target_file)
-            else:
-                logging.debug("capture a Non-doc comment")
+        self.link()
+
+    def link(self):
+        self._mapper.link2()
 
 
 class BADiffCommentParser(AbstractParser):
