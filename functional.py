@@ -417,58 +417,6 @@ class AbstractSignalFunctional(object):
                 logging.fatal(e)
         target.desc = desc
 
-    #
-    # def func_go(self, *args, **kwargs):
-    #     global target
-    #     desc = ""
-    #     for oi in args:
-    #         try:
-    #             result = self.combine_to_tuple(oi, kwargs["comment"])
-    #             while True:
-    #                 try:
-    #                     # TODO refactor
-    #                     tx = next(result)
-    #                     if oi == "class_name_pat":
-    #                         cls = ClassObject(tx[0])
-    #                         self._class_set[tx[0]] = cls
-    #                         target = cls
-    #                         logging.info("create a new class '{}'".format(target.name))
-    #                     elif oi == "func_name_pat":
-    #                         func = FunctionObject(tx[0])
-    #                         self._function_set[tx[0]] = func
-    #                         target = func
-    #                         logging.info("create a new function '{}'".format(target.name))
-    #                     elif oi == "var_name_pat":
-    #                         var = VariableObject(tx[1])
-    #                         var.type = tx[0]
-    #                         self._variable_set[tx[0]] = var
-    #                         target = var
-    #                         logging.info("create a new variable '{}'".format(target.name))
-    #                     elif oi == "header_pat":
-    #                         m = ModuleObject(tx[0])
-    #                         self._module_set[tx[0]] = m
-    #                         target = m
-    #                         logging.info("create a new module '{}'".format(target.name))
-    #                     elif oi == "desc_pat":
-    #                         desc += tx[0]
-    #                     elif oi == "link_pat":
-    #                         self.link(target, tx[0])  # tx(parent) <- target
-    #                     elif oi == "in_param_pat":
-    #                         target.in_param.append(tx)
-    #                         logging.info(
-    #                             "create a new function input param '{}' type={}, desc={}".format(tx[1], tx[0], tx[2]))
-    #                     elif oi == "out_param_pat":
-    #                         target.out_type = tx[0]
-    #                         logging.info(
-    #                             "create a new function output param type={}".format(tx[0]))
-    #                     else:
-    #                         break
-    #                 except StopIteration:
-    #                     break
-    #         except KeyError as e:
-    #             logging.fatal(e)
-    #     target.desc = desc
-
     def dump(self, info, path):
         pass
 
