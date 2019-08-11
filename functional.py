@@ -42,7 +42,7 @@ class ModuleObject(BasedObject):
 
     def travel(self):
         for cls in self.classes:
-            yield cls
+            cls.travel()
 
         for var in self.variables:
             yield var
@@ -375,21 +375,28 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
     def __init__(self):
         super().__init__()
         self.chunk = ""
+        self.mods = []
 
-    def markdown_format(self):
-        mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
-        for mod in mods:
-            while True:
-                try:
-                    obj = next(mod.travel())
-                    if isinstance(obj, ClassObject):
-                        print("class :"+obj.name)
-                        continue
-                    if isinstance(obj, ModuleFunctionObject):
-                        print("function: "+ obj.name)
-                        continue
-                    if isinstance(obj, ModuleVariableObject):
-                        print("variable: "+ obj.name)
-                        continue
-                except StopIteration:
-                    break
+    def transform_to_md(self):
+        self.mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
+
+        for mod in self.mods:
+            print("module: " + mod.name)
+            for cls in mod.classes:
+                for parent in cls.linked_to:
+                    if parent is mod:
+                        print(mod.name+"::"+"class:" + cls.name)
+                        for var in cls.variables:
+                            print( cls.name + "::",var.name, var.type)
+                        for mth in cls.methods:
+                            print(cls.name + "::",mth.name)
+            for var in mod.variables:
+                if isinstance(var, ModuleVariableObject):
+                    for parent in var.linked_to:
+                        if parent is mod:
+                            print (mod.name+"::", var.name, var.type)
+            for func in mod.functions:
+                if isinstance(func, ModuleFunctionObject):
+                    for parent in func.linked_to:
+                        if parent is mod:
+                            print(mod.name+"::", func.name)
