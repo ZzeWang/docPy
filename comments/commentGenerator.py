@@ -4,6 +4,7 @@ import abc
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - Factory - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+from functional import *
 
 
 class CommentBlock:
@@ -30,7 +31,7 @@ class CommentBlock:
             for sing in result:
                 do(self, sing)
         except IndexError:
-            logging.error("do not find {} in comment".format(key))
+            logging.error("do not find '{}' in comment".format(key))
             raise IndexError
 
     def _parse_desc(self):
@@ -64,6 +65,10 @@ class CommentBlock:
             logging.error("do not find input params!")
             raise IndexError
 
+    @abc.abstractmethod
+    def getObject(self):
+        return None
+
 
 class ClassBlock(CommentBlock):
     ClassSignal = r"&"
@@ -80,6 +85,11 @@ class ClassBlock(CommentBlock):
             self._parse_name()
         except IndexError as e:
             print(e)
+
+    def getObject(self):
+        cls = ClassObject(self.name)
+        cls.desc = self.desc
+        return cls
 
 
 class FunctionBlock(CommentBlock):
@@ -121,9 +131,23 @@ class FunctionBlock(CommentBlock):
 
     def pipeline(self):
         super().pipeline()
-        self._parse_name()
-        self.__parse_ins()
-        self.__parse_out()
+        try:
+            self._parse_name()
+            self.__parse_ins()
+            self.__parse_out()
+        except IndexError as e:
+            print(e)
+
+    def getObject(self):
+        if self.link_type == "LK":
+            func = ModuleFunctionObject(self.name)
+        else:
+            func = ClassMethodObject(self.name)
+        func.desc = self.desc
+        func.out_type = self.out
+        for input_param in self.ins:
+            func.in_param.append(input_param)
+        return func
 
 
 class ModuleBlock(CommentBlock):
@@ -141,6 +165,11 @@ class ModuleBlock(CommentBlock):
             self._parse_desc()
         except IndexError as e:
             print(e)
+
+    def getObject(self):
+        mod = ModuleObject(self.name)
+        mod.desc = self.desc
+        return mod
 
 
 class VariableBlock(CommentBlock):
@@ -168,6 +197,16 @@ class VariableBlock(CommentBlock):
         except IndexError as e:
             print(e)
 
+    def getObject(self):
+        if self.link_type == "LK":
+            var = ModuleVariableObject(self.name)
+        else:
+            var = MemberVariableObject(self.name)
+
+        var.desc = self.desc
+        var.type = self.type
+        return var
+
 
 class BlockFactory:
 
@@ -185,14 +224,14 @@ class BlockFactory:
             "VAR": VariableBlock,
         }
 
-    def create_boby_by_name(self, obj_type):
+    def create_boby_by_name(self, obj_type: str, comment: str):
         try:
-            return self.name_map[obj_type]("")
+            return self.name_map[obj_type](comment)
         except KeyError:
             logging.error("no block object named '{}'".format(obj_type))
 
-    def create_bobj_by_signal(self, signal: str):
+    def create_bobj_by_signal(self, signal: str, comment: str):
         try:
-            return self.signal_map[signal.upper()]("")
+            return self.signal_map[signal.upper()](comment)
         except KeyError:
             logging.error("no signal '{}'".format(signal))
