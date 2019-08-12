@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from loader.SingleLoader import *
 from functional import AbstractSignalFunctional
+from comments.commentGenerator import BlockFactory
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -120,28 +121,22 @@ class AbstractParser:
         self._mapper的方法处理，此处_mapper必须是AbstractSignalFunctional的子类
     """
 
+    def __prefix_standard(self, comment:str) -> str:
+        return comment[:comment.find(":")]
+
     def switch(self, target_file):
-        function_pat = re.compile("@: *[a-zA-Z_0-9]+ *(?:[a-zA-Z_0-9]+|[a-zA-Z_0-9]+:{2}) *")
-        class_pat = re.compile("&: *class *[a-zA-Z_0-9]")
-        dependency_pat = re.compile("#:")
-        header_pat = re.compile("!:")
-        variable_pat = re.compile("v|Var:")
+
+        factory = BlockFactory()
+
         while True:
             comment = self.__get_next_comment()
             if comment is None:
                 break
+            comment += "\n"
+            obj = factory.create_bobj_by_signal(self.__prefix_standard(comment), comment)
+            obj.pipeline()
 
-            if comment[0] == "#" and re.search(dependency_pat, comment):
-                self._mapper.func_go("dep_pat", comment=comment + "\n", path=target_file)
-            elif comment[0] == "!" and re.search(header_pat, comment):
-                self._mapper.func_go("header_pat", "desc_pat", comment=comment + "\n", path=target_file)
-            elif comment[0] == "&" and re.search(class_pat, comment) is not None:
-                self._mapper.func_go("class_name_pat", "desc_pat", "link_pat", comment=comment + "\n", path=target_file)
-            elif comment[0] == "@" and re.search(function_pat, comment) is not None:
-                self._mapper.func_go("func_name_pat", "in_param_pat", "out_param_pat", "desc_pat", "link_pat",
-                                     comment=comment + "\n", path=target_file)
-            elif comment[:3].upper() == "VAR" and re.search(variable_pat, comment):
-                self._mapper.func_go("var_name_pat", "desc_pat", "link_pat", comment=comment + "\n", path=target_file)
+            self._mapper.func_go1(obj)
         self.link()
 
     def link(self):
