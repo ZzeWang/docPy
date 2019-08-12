@@ -2,9 +2,8 @@ import re
 import logging
 import abc
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - Factory - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-from functional import *
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from codeObject import *
 
 
 class CommentBlock:
@@ -20,6 +19,7 @@ class CommentBlock:
             "desc": re.compile("\$:(.*?)\n"),
             "link": re.compile("((?:(?:[ToOt]+)|(?:[LKk]+)|(?:[Mm]))): *(.*?) *\n")
         }
+        self.logger = logging.getLogger("CommentBlock")
 
     def set_comment(self, comment):
         self.chunk = comment
@@ -31,7 +31,7 @@ class CommentBlock:
             for sing in result:
                 do(self, sing)
         except IndexError:
-            logging.error("do not find '{}' in comment".format(key))
+            self.logger.error("do not find '{}' in comment".format(key))
             raise IndexError
 
     def _parse_desc(self):
@@ -62,7 +62,7 @@ class CommentBlock:
                 else:
                     self.link += "," + lk[1]
         except IndexError:
-            logging.error("do not find input params!")
+            self.logger.error("do not find input params!")
             raise IndexError
 
     @abc.abstractmethod
@@ -208,6 +208,45 @@ class VariableBlock(CommentBlock):
         return var
 
 
+class ReferencedBlock(CommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+        self.referenced = []
+        self.pattern.update(
+            {
+                "ref": re.compile("#:(.*?)\n"),
+                "name": re.compile("")
+            }
+        )
+
+    def _parse_name(self):
+        self.name = "Ref"
+
+    def _parse_desc(self):
+        self.desc = "references :"
+
+    def _parse_ref(self):
+        def __(self, sing):
+            self.referenced.extend(sing.split(","))
+
+        self._findall("ref", __)
+
+    def pipeline(self):
+        try:
+            self._parse_name()
+            self._parse_desc()
+            self._parse_ref()
+            super()._parse_link()
+        except IndexError as e:
+            print(e)
+
+    def getObject(self):
+        ref = ReferencedObject(self.name)
+        ref.desc = self.desc
+        ref.refs = self.referenced
+        return ref
+
+
 class BlockFactory:
 
     def __init__(self):
@@ -215,23 +254,26 @@ class BlockFactory:
             "ClassBlock": ClassBlock,
             "FunctionBlock": FunctionBlock,
             "ModuleBlock": ModuleBlock,
-            "VariableBlock": VariableBlock
+            "VariableBlock": VariableBlock,
+            "ReferencedBlock": ReferencedBlock
         }
         self.signal_map = {
             "@": FunctionBlock,
             "&": ClassBlock,
             "!": ModuleBlock,
             "VAR": VariableBlock,
+            "#": ReferencedBlock
         }
+        self.logger = logging.getLogger("BlockFactory")
 
     def create_boby_by_name(self, obj_type: str, comment: str):
         try:
             return self.name_map[obj_type](comment)
         except KeyError:
-            logging.error("no block object named '{}'".format(obj_type))
+            self.logger.error("no block object named '{}'".format(obj_type))
 
     def create_bobj_by_signal(self, signal: str, comment: str):
         try:
             return self.signal_map[signal.upper()](comment)
         except KeyError:
-            logging.error("no signal '{}'".format(signal))
+            self.logger.error("no signal '{}'".format(signal))

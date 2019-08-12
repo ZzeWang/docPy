@@ -6,10 +6,10 @@ from threading import Lock, Thread
 import logging
 
 from codeObject import *
-from comments.commentGenerator import CommentBlock
+from comments.commentGenerator import *
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("AbstractSignalFunctional")
 
 
 class AbstractSignalFunctional(object):
@@ -55,7 +55,7 @@ class AbstractSignalFunctional(object):
         except KeyError:
             self._obj_set[name] = [obj]
 
-    def link(self, tgt, parents):
+    def __link(self, tgt, parents):
         if isinstance(tgt, ModuleObject):
             return
         for parent in parents:
@@ -79,7 +79,7 @@ class AbstractSignalFunctional(object):
                     logging.error(
                         "unresolved relations happened!  {}' -> '{}' . '{}' not find!".format(tgt.name, parent, parent))
 
-    def func_go1(self, bobj: CommentBlock):
+    def link(self, bobj: CommentBlock):
         assert issubclass(bobj.__class__, CommentBlock)
 
         obj = bobj.getObject()
@@ -87,13 +87,18 @@ class AbstractSignalFunctional(object):
         self.__add_obj(obj.name, obj)
         _, links = self.__break_down(bobj.link)
 
-        self.link(obj, links)
+        self.__link(obj, links)
 
     def dump(self, info, path):
         pass
 
+    @abc.abstractmethod
+    def report(self):
+        pass
 
 class SynSignalFunctional(AbstractSignalFunctional):
+    __module__ = abc.ABCMeta
+
     def __init__(self):
         super().__init__()
         self.file_lock = Lock()
@@ -103,6 +108,40 @@ class SynSignalFunctional(AbstractSignalFunctional):
         with open(path, "a") as f:
             f.write(info)
         self.file_lock.release()
+
+
+class ReportSignalFunctional(SynSignalFunctional):
+    def __init__(self):
+        super().__init__()
+        self.mods = []
+
+    def report(self):
+        self.mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
+        for mod in self.mods:
+            mod_prefix = "module_{}::".format(mod.name)
+            for cls in mod.classes:
+                cls_prefix = "cls_{}::".format(cls.name)
+                for parent in cls.linked_to:
+                    if parent is mod:
+                        info = mod_prefix + cls_prefix
+                        for var in cls.variables:
+                            __ = "{} (type={})".format(var.name, var.type, )
+                            print(info + __)
+                        for mth in cls.methods:
+                            __ = "{} (len(input params)={}, out={})".format(mth.name, len(mth.in_param), mth.out_type)
+                            print(info + __)
+            for var in mod.variables:
+                if isinstance(var, ModuleVariableObject):
+                    for parent in var.linked_to:
+                        if parent is mod:
+                            __ = "{} (type={})".format(var.name, var.type, )
+                            print(mod_prefix + __)
+            for func in mod.functions:
+                if isinstance(func, ModuleFunctionObject):
+                    for parent in func.linked_to:
+                        if parent is mod:
+                            __ = "{} (len(input params)={}, out={})".format(func.name, len(func.in_param), func.out_type)
+                            print(mod.name + "::", __)
 
 
 class ToMarkdownSignalFunctional(SynSignalFunctional):
@@ -119,25 +158,4 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
         self.mods = []
 
     def transform_to_md(self):
-        self.mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
-
-        for mod in self.mods:
-            print("module: " + mod.name)
-            for cls in mod.classes:
-                for parent in cls.linked_to:
-                    if parent is mod:
-                        print(mod.name + "::" + "class:" + cls.name)
-                        for var in cls.variables:
-                            print(cls.name + "::", var.name, var.type)
-                        for mth in cls.methods:
-                            print(cls.name + "::", mth.name)
-            for var in mod.variables:
-                if isinstance(var, ModuleVariableObject):
-                    for parent in var.linked_to:
-                        if parent is mod:
-                            print(mod.name + "::", var.name, var.type)
-            for func in mod.functions:
-                if isinstance(func, ModuleFunctionObject):
-                    for parent in func.linked_to:
-                        if parent is mod:
-                            print(mod.name + "::", func.name)
+        pass

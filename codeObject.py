@@ -1,7 +1,7 @@
 import abc, logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - Factory - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("BasedObject")
 
 
 class BasedObject:
@@ -26,6 +26,21 @@ class BasedObject:
         :return:
         """
         pass
+
+
+class ReferencedObject(BasedObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.linked_to = []
+        self.refs = []
+
+    def add_parent(self, parent):
+        assert isinstance(parent, ModuleObject)
+        self.linked_to.append(parent)
+
+    def add_child(self, child):
+        logging.debug("referenced object have no child")
+        return
 
 
 class ModuleObject(BasedObject):
@@ -95,12 +110,6 @@ class ClassObject(BasedObject):
             self.variables.append(child)
         elif isinstance(child, ClassMethodObject):
             self.methods.append(child)
-
-
-class DependencyObject(BasedObject):
-    def __init__(self, name):
-        super().__init__(name)
-        self.deps = []
 
 
 class VariableObject(BasedObject):

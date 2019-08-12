@@ -3,8 +3,8 @@
 """
 import re, logging
 from .abstractParser import BADiffCommentParser
-from functional import ToMarkdownSignalFunctional
-
+from functional import ToMarkdownSignalFunctional, ReportSignalFunctional
+from loader.SingleLoader import SingleFileLoader
 """
     解析C++文件
 """
@@ -14,7 +14,7 @@ logger = logging.getLogger("CppParser")
 
 class CppParser(BADiffCommentParser):
     def __init__(self, path):
-        super().__init__(before=r"\/\*", after=r"\*\/", path=path, mapper=ToMarkdownSignalFunctional())
+        super().__init__(before=r"\/\*", after=r"\*\/", path=path, mapper=ReportSignalFunctional(), loader=SingleFileLoader())
         try:
             self.parse_comment()
         except Exception as e:
