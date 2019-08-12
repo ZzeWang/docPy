@@ -20,6 +20,9 @@ class CommentBlock:
             "link": re.compile("((?:(?:[ToOt]+)|(?:[LKk]+)|(?:[Mm]))): *(.*?) *\n")
         }
 
+    def set_comment(self, comment):
+        self.chunk = comment
+
     def _findall(self, key, do):
         try:
             result = re.findall(self.pattern[key], self.chunk)
@@ -73,7 +76,10 @@ class ClassBlock(CommentBlock):
 
     def pipeline(self):
         super().pipeline()
-        self._parse_name()
+        try:
+            self._parse_name()
+        except IndexError as e:
+            print(e)
 
 
 class FunctionBlock(CommentBlock):
@@ -130,5 +136,63 @@ class ModuleBlock(CommentBlock):
         )
 
     def pipeline(self):
-        self._parse_name()
-        self._parse_desc()
+        try:
+            self._parse_name()
+            self._parse_desc()
+        except IndexError as e:
+            print(e)
+
+
+class VariableBlock(CommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+        self.type = ""
+        self.pattern.update(
+            {
+                "name": re.compile("[vV]ar: *\(.*?\) *(.*?) *\n"),
+                "type": re.compile("[vV]ar: *\((.*?)\) .*? *\n")
+            }
+        )
+
+    def _parse_type(self):
+        def __(self, sing):
+            self.type = sing
+
+        self._findall("type", __)
+
+    def pipeline(self):
+        super().pipeline()
+        try:
+            self._parse_name()
+            self._parse_type()
+        except IndexError as e:
+            print(e)
+
+
+class BlockFactory:
+
+    def __init__(self):
+        self.name_map = {
+            "ClassBlock": ClassBlock,
+            "FunctionBlock": FunctionBlock,
+            "ModuleBlock": ModuleBlock,
+            "VariableBlock": VariableBlock
+        }
+        self.signal_map = {
+            "@": FunctionBlock,
+            "&": ClassBlock,
+            "!": ModuleBlock,
+            "VAR": VariableBlock,
+        }
+
+    def create_boby_by_name(self, obj_type):
+        try:
+            return self.name_map[obj_type]("")
+        except KeyError:
+            logging.error("no block object named '{}'".format(obj_type))
+
+    def create_bobj_by_signal(self, signal: str):
+        try:
+            return self.signal_map[signal.upper()]("")
+        except KeyError:
+            logging.error("no signal '{}'".format(signal))
