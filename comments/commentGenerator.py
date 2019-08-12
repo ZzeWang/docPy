@@ -30,22 +30,24 @@ class CommentBlock:
             logging.error("do not find {} in comment".format(key))
             raise IndexError
 
-    def __parse_desc(self):
+    def _parse_desc(self):
         def __(self, sing):
             self.desc += sing
 
         self._findall("desc", __)
 
-    @abc.abstractmethod
-    def __parse_name(self):
-        pass
+    def _parse_name(self):
+        def __(self, sing):
+            self.name = sing
+
+        self._findall("name", __)
 
     @abc.abstractmethod
     def pipeline(self):
-        self.__parse_desc()
-        self.__parse_link()
+        self._parse_desc()
+        self._parse_link()
 
-    def __parse_link(self):
+    def _parse_link(self):
         try:
             result = re.findall(self.pattern["link"], self.chunk)
             self.link_type = result[0][0]  # trigger IndexError
@@ -69,15 +71,9 @@ class ClassBlock(CommentBlock):
             {"name": re.compile("&: *class *(.*?) *\n")}
         )
 
-    def __parse_name(self):
-        def __(self, sing):
-            self.name = sing
-
-        self._findall("name", __)
-
     def pipeline(self):
         super().pipeline()
-        self.__parse_name()
+        self._parse_name()
 
 
 class FunctionBlock(CommentBlock):
@@ -93,7 +89,7 @@ class FunctionBlock(CommentBlock):
             "out": re.compile("<: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *\n"),
         })
 
-    def __parse_name(self):
+    def _parse_name(self):
         def __(self, sing):
             self.name = sing
 
@@ -111,7 +107,7 @@ class FunctionBlock(CommentBlock):
 
         self._findall("out", __)
 
-    def __parse_desc(self):
+    def _parse_desc(self):
         def __(self, sing):
             self.desc += sing
 
@@ -119,7 +115,20 @@ class FunctionBlock(CommentBlock):
 
     def pipeline(self):
         super().pipeline()
-        self.__parse_name()
+        self._parse_name()
         self.__parse_ins()
         self.__parse_out()
 
+
+class ModuleBlock(CommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+        self.pattern.update(
+            {
+                "name": re.compile("!: *(.*?) *\n")
+            }
+        )
+
+    def pipeline(self):
+        self._parse_name()
+        self._parse_desc()
