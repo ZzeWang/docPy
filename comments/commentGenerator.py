@@ -13,8 +13,11 @@ class CommentBlock:
         self.chunk = comment
         self.name = ""
         self.desc = ""
+        self.link_type = ""
+        self.link = ""
         self.pattern = {
-            "desc": re.compile("\$:(.*?)\n")
+            "desc": re.compile("\$:(.*?)\n"),
+            "link": re.compile("((?:(?:[ToOt]+)|(?:[LKk]+)|(?:[Mm]))): *(.*?) *\n")
         }
 
     def _findall(self, key, do):
@@ -33,13 +36,28 @@ class CommentBlock:
 
         self._findall("desc", __)
 
+    @abc.abstractmethod
     def __parse_name(self):
         pass
 
     @abc.abstractmethod
     def pipeline(self):
-        self.__parse_name()
         self.__parse_desc()
+        self.__parse_link()
+
+    def __parse_link(self):
+        try:
+            result = re.findall(self.pattern["link"], self.chunk)
+            self.link_type = result[0][0]  # trigger IndexError
+            self.link = self.link_type + ":"
+            for idx, lk in enumerate(result):
+                if idx == 0:
+                    self.link += lk[1]
+                else:
+                    self.link += "," + lk[1]
+        except IndexError:
+            logging.error("do not find input params!")
+            raise IndexError
 
 
 class ClassBlock(CommentBlock):
@@ -52,7 +70,15 @@ class ClassBlock(CommentBlock):
         )
 
     def __parse_name(self):
-        pass
+        def __(self, sing):
+            self.name = sing
+
+        self._findall("name", __)
+
+    def pipeline(self):
+        super().pipeline()
+        self.__parse_name()
+
 
 class FunctionBlock(CommentBlock):
     FuncSignal = r"@"
@@ -61,12 +87,10 @@ class FunctionBlock(CommentBlock):
         super().__init__(comment)
         self.ins = []
         self.out = ""
-        self.link_type = ""
-        self.link = []
         self.pattern.update({
+            "name": re.compile("@: *([a-zA-Z_0-9]+) *\n"),
             "ins": re.compile(">: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *(?P<name>[a-zA-Z_0-9]+) *: *(?P<desc>.*?) *\n"),
             "out": re.compile("<: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *\n"),
-            "link": re.compile("((?:(?:[ToOt]+)|(?:[LKk]+)|(?:[Mm]))): *(.*?) *\n")
         })
 
     def __parse_name(self):
@@ -93,23 +117,9 @@ class FunctionBlock(CommentBlock):
 
         self._findall("desc", __)
 
-    def __parse_link(self):
-        try:
-            result = re.findall(self.pattern["link"], self.chunk)
-            type = result[0][0]  # trigger IndexError
-            self.link = type + ":"
-            for idx, lk in enumerate(result):
-                if idx == 0:
-                    self.link += lk[1]
-                else:
-                    self.link += "," + lk[1]
-        except IndexError:
-            logging.error("do not find input params!")
-            raise IndexError
-
     def pipeline(self):
+        super().pipeline()
         self.__parse_name()
         self.__parse_ins()
         self.__parse_out()
-        self.__parse_desc()
-        self.__parse_link()
+
