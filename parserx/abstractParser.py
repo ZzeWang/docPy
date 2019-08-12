@@ -2,15 +2,15 @@
     dependency
 """
 import re
-import logging
+import logging, abc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from loader.SingleLoader import *
-from functional import AbstractSignalFunctional
+from functional import ReportSignalFunctional, AbstractSignalFunctional
 from comments.commentGenerator import BlockFactory
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("BADiffCommentParser")
 """
     2019年8月8日 星期四 
     抽象基类
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class AbstractParser:
+    __module__ = abc.ABCMeta
 
     def __init__(self, *args, **kwargs):
         self._before = r""
@@ -30,15 +31,18 @@ class AbstractParser:
             self._after = ""
             self._before = ""
 
-        self._mapper = AbstractSignalFunctional()
-        if kwargs and kwargs["mapper"]:
+        try:
             if isinstance(kwargs["mapper"], AbstractSignalFunctional):
                 self._mapper = kwargs["mapper"]
+        except KeyError:
+            self._mapper = ReportSignalFunctional()
 
-        self.file = FileLoader()
-        if kwargs and kwargs["loader"]:
+
+        try:
             if isinstance(kwargs["loader"], FileLoader):
                 self.file = kwargs["loader"]
+        except KeyError:
+            self.file = SingleFileLoader()
 
         if kwargs and kwargs["path"]:
             self.file.set_attr_by_path(kwargs["path"])
@@ -47,13 +51,11 @@ class AbstractParser:
             logging.fatal("no file input")
             raise Exception
 
-        self._comment_list = []  # block of comments \/\*
+        self._comment_list = []
         self._comment_pattern = re.compile("{}(.*?){}".format(self._before, self._after), re.DOTALL)
 
         self.iter_of_comment = iter(self._comment_list)
 
-        # 用于处理符号时
-        self._thread_executor = ThreadPoolExecutor(max_workers=3)
 
     """
         由于存在分页问题，可能会造成同一页内
@@ -68,6 +70,7 @@ class AbstractParser:
             注释在上一页的位置
     """
 
+    @abc.abstractmethod
     def pre_symmetric_check(self, page_content):
         return False
 
@@ -121,10 +124,13 @@ class AbstractParser:
         self._mapper的方法处理，此处_mapper必须是AbstractSignalFunctional的子类
     """
 
-    def __prefix_standard(self, comment:str) -> str:
+    def __prefix_standard(self, comment: str) -> str:
         return comment[:comment.find(":")]
 
-    def switch(self, target_file):
+    def resolve_unlinked(self):
+        self._mapper.link2()
+
+    def switch(self):
 
         factory = BlockFactory()
 
@@ -136,11 +142,13 @@ class AbstractParser:
             obj = factory.create_bobj_by_signal(self.__prefix_standard(comment), comment)
             obj.pipeline()
 
-            self._mapper.func_go1(obj)
-        self.link()
+            self._mapper.link(obj)
 
-    def link(self):
-        self._mapper.link2()
+        self.resolve_unlinked()
+
+    def run(self):
+        self.parse_comment()
+        self.switch()
 
 
 class BADiffCommentParser(AbstractParser):

@@ -4,12 +4,11 @@
 import os
 import re
 import logging
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - SingleFileLoader - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
+import abc
 
 class FileLoader:
+    __module__ = abc.ABCMeta
+
     def load(self):
         pass
 
@@ -23,13 +22,13 @@ class FileLoader:
 class SingleFileLoader(FileLoader):
 
     def __init__(self, limit=100):
-        super().__init__()
         self._file_path = ""
         self._file_format = ""  # .cpp, .hpp, .h, .py, .java, ...
         self._file_name = ""
         self.chunk = ""
         self.limitation = limit  #
         self.pages = []  # 对于超过限制大小的单个文件进行分页处理
+        self.logger = logging.getLogger("SingleFileLoader")
 
     """
         setter方法
@@ -67,7 +66,7 @@ class SingleFileLoader(FileLoader):
 
         try:
             file_size = os.path.getsize(self._file_path)
-            logging.info("open file '{}' with size={}, aka {}MB".format(self._file_name, file_size, file_size / self.limitation))
+            self.logger.info("open file '{}' with size={}, aka {}MB".format(self._file_name, file_size, file_size / self.limitation))
             if file_size > self.limitation:  # if source code file's size bigger than 1MB
 
                 with open(self._file_path, "r", encoding="utf8") as target:
@@ -77,10 +76,10 @@ class SingleFileLoader(FileLoader):
                             break
                         else:
                             self.pages.append(self.chunk)
-                logging.info("do paging , count = {}".format(len(self.pages)))
+                self.logger.info("do paging , count = {}".format(len(self.pages)))
             else:
                 with open(self._file_path, "r", encoding="utf8") as target:
                     self.pages.append(target.read())
 
         except FileNotFoundError as e1:
-            logging.error(msg="file: {} not exists".format(self._file_path))
+            self.logger.error(msg="file: {} not exists".format(self._file_path))
