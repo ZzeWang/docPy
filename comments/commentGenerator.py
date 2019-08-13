@@ -17,7 +17,7 @@ class CommentBlock:
         self.link = ""
         self.pattern = {
             "desc": re.compile("\$:(.*?)\n"),
-            "link": re.compile("((?:(?:[ToOt]+)|(?:[LKk]+)|(?:[Mm]))): *(.*?) *\n")
+            "link": re.compile("((?:(?:LK|Lk|lk)|(?:[Mm]))): *(.*?) *\n")
         }
         self.logger = logging.getLogger("CommentBlock")
 

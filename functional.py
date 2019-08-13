@@ -1,6 +1,4 @@
-"""
-    dependency
-"""
+
 import re, abc
 from threading import Lock, Thread
 import logging
