@@ -1,21 +1,55 @@
-import re, abc
-from threading import Lock, Thread
+from threading import Lock
 import logging
-
-from codeObject import *
 from comments.commentGenerator import *
+from codeObject import ScopedObject
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
 logger = logging.getLogger("AbstractSignalFunctional")
+"""
+    #:threading.Lock,comments.commentGenerator,ScopedObject
+"""
 
+"""
+    !: functional
+    $: 模块的主要任务用来解决依赖关系实现对文档节点的链接，其次将链接好的文档节点
+    $: 转换为指定的格式（如.md/.html等）。
+"""
 
+"""
+    &: class AbstractSignalFunctional
+    $: 实现链接。把在解析文档的时候产生的注释对象节点按照其指定的链接规则链接起来，链接有两个
+    $: 第一种是M类链接，它表示为将该节点链接到类节点对象，因此只能够将函数和变量定义给该链接类型
+    $: 第二中是LK类链接，它表示将该节点链接到模块或者项目对象节点，因此可以定义给任意节点类型定义该链接
+    $: 当然这是链接的内部实现，在使用时可以不用显式的定义LK或者M，但是当该节点对象需要链接到多个
+    $: 父节点时，需要显示地标出LK。函数lazy_link()实现了隐式链接
+"""
 class AbstractSignalFunctional(object):
     __module__ = abc.ABCMeta
 
+    """
+        @: init
+        $: 构造器 
+    """
     def __init__(self):
-
+        """
+            Var: (dict[str:BaseObject]) _unresolved_relations
+            $: 存放未解决的关系
+        """
         self._unresolved_relations = {}
+
+        """
+            Var: (dict[str:BaseObject]) _obj_set
+            $: 存放文档的所有文档节点对象
+        """
         self._obj_set = {}
+
+        """
+            Var: (ScopedObject) scope
+            $: 每个项目项目仅有一个scope，随着注释的解析，每进入一个Scoped对象
+            $: scope就会将其进行代理，并将其压入scope的对象栈。具体参看codeObject/Scoped对象
+            $:的实现
+        """
+        self.scope = ScopedObject("scope")
 
     def __break_down(self, sp: str) -> tuple:
         return sp[:sp.find(":")].strip().upper(), [i.strip() for i in sp[sp.find(":") + 1:].split(",")]
@@ -52,6 +86,14 @@ class AbstractSignalFunctional(object):
         except KeyError:
             self._obj_set[name] = [obj]
 
+    """
+        @:  links
+        >: (subClassOfBaseObject) tgt: 需要链接的对象
+        >: (list[str]) parents: tgt需要链接到的域对象列表
+        $: link()的具体实现，在当前已经解析的所有文档对象_obj_set中依次查找
+        $: 每个parent，如果找到则将tgt链接到_obj_set[parent]，否则将tgt加入的
+        $: _unresolved_relations中。
+    """
     def __link(self, tgt, parents):
         if isinstance(tgt, ProjectObject):
             return
@@ -67,6 +109,11 @@ class AbstractSignalFunctional(object):
                     logging.info("unresolved link: '{}' "
                                  "(type={}) -> '{}' (type=unknown)".format(tgt.name, tgt.__class__.__name__, parent))
 
+    """
+        @: link2
+        $: 在解析完一个源码文件后对所有未解决的关系进行再一次链接
+        $: 如果没有发现待解决的关系，将会报错
+    """
     def link2(self):
         for tgt in self._unresolved_relations.keys():
             for parent in self._unresolved_relations[tgt]:
@@ -76,6 +123,12 @@ class AbstractSignalFunctional(object):
                     logging.error(
                         "unresolved relations happened!  {}' -> '{}' . '{}' not find!".format(tgt.name, parent, parent))
 
+    """
+        @: link
+        >:(CommentBlock) bobj
+        <:(BaseObject)
+        $: 从注释块对象bobj中获取一个BaseObject对象，并链接。是对\_\_link()的包装
+    """
     def link(self, bobj: CommentBlock):
         assert issubclass(bobj.__class__, CommentBlock)
 
@@ -85,10 +138,46 @@ class AbstractSignalFunctional(object):
         _, links = self.__break_down(bobj.link)
 
         self.__link(obj, links)
+        return obj
+    """
+        @: lazy_link
+        >: (subClassOfCommentBlock) bobj : 文档注释对象
+        $: 对link()的包装。需要强调的一点是，由于scope对象在构造时使用自己自举
+        $: 因此在解析文档时，如果不定义Pj/Module或者Class，而直接定义函数或者变量
+        $: 那么会在解析第一个文档注释的时候进入第一个判断块，而此时scope的当前域为其自身（一个ScopedObject对象）
+        $: 必然会引起错误。因此，在编写代码时，必须有项目有模块，结构逻辑清晰
+    """
 
+    def lazy_link(self, bobj: LazyCommentBlock):
+        assert issubclass(bobj.__class__, CommentBlock)
+        if bobj.link_type == "S" and isinstance(bobj, LazyCommentBlock):
+            if not isinstance(self.scope.top(), ScopedObject):
+                obj = bobj.lazy_getObject(self.scope.top())
+                self.__add_obj(obj.name, obj)
+                self.scope.add_child(obj)
+                self.scope.proxy(obj)
+            else:
+                print("You Haven't Defined Any Project/Module/Class!")
+                raise TypeError
+        else:
+            linked_obj = self.link(bobj)
+            self.scope.proxy(linked_obj)
+
+
+    """
+        @: dump
+        >: (str) info : 需要保存的信息
+        >: (path) path: 保存地点
+        $: 该方法放在这里意义不明确，待改进
+    """
     def dump(self, info, path):
         pass
 
+    """
+        @: report
+        $: 对所有产生的文档对象和链接进行报道，子类通过重写该方法实现
+        $: 转换到指定文档格式的任务
+    """
     @abc.abstractmethod
     def report(self):
         pass
@@ -172,7 +261,7 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
 
     def report(self):
         pj = [i[0] for i in self._obj_set.values() if isinstance(i[0], ProjectObject)][0]
-        self.dump("Project *{}*\n\n{}\n\n---\n\n".format(pj.name, pj.desc) , r"E:\file\pyProj\docPy\test\targetfile")
+        self.dump("Project *{}*\n\n{}\n\n---\n\n".format(pj.name, pj.desc), r"E:\file\pyProj\docPy\test\targetfile")
         self.mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
 
         for mod in self.mods:

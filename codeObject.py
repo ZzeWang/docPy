@@ -3,8 +3,10 @@ import abc, logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - Factory - %(levelname)s - %(message)s')
 logger = logging.getLogger("BasedObject")
 
-
-class BasedObject:
+"""
+    !: DocObject
+"""
+class BasedObject(object):
     __module__ = abc.ABCMeta
 
     def __init__(self, name):
@@ -28,6 +30,65 @@ class BasedObject:
         pass
 
 
+class Scoped(object):
+    __hash__ = object.__hash__
+
+    def __init__(self, priority):
+        self.priority = priority
+
+
+    def __eq__(self, other):
+        return self.priority == other.priority
+
+    def __gt__(self, other):
+        return self.priority > other.priority
+
+    def __lt__(self, other):
+        return self.priority < other.priority
+
+    def __le__(self, other):
+        return self.priority <= other.priority
+
+    def __ge__(self, other):
+        return self.priority >= other.priority
+
+
+class ScopedObject(BasedObject, Scoped):
+    def __init__(self, name="scope"):
+        BasedObject.__init__(self, name)
+        Scoped.__init__(self, 4)
+        self.is_proxy = False
+        self._proxy = self  # 自举
+        self._stack = [self._proxy]
+
+    def __del__(self):
+        self._stack.pop()  # 移除自举时
+
+    def change_scope(self, obj):
+        if self._proxy > obj:
+            self._stack.append(obj)
+        elif self._proxy < obj or self._proxy == obj:
+            while 1:
+                self._stack.pop()
+                if self.top() > obj:
+                    break
+            self._stack.append(obj)
+
+    def top(self):
+        return self._stack[-1]
+
+    def proxy(self, _p):
+        if isinstance(_p, Scoped):
+            self.change_scope(_p)
+            self._proxy = self.top()
+
+    def add_child(self, child):
+        self._proxy.add_child(child)
+
+    def add_parent(self, parent):
+        self._proxy.add_parent(parent)
+
+
 class ReferencedObject(BasedObject):
     def __init__(self, name):
         super().__init__(name)
@@ -43,9 +104,11 @@ class ReferencedObject(BasedObject):
         return
 
 
-class ProjectObject(BasedObject):
+class ProjectObject(BasedObject, Scoped):
     def __init__(self, name):
-        super().__init__(name)
+        object.__init__(self)
+        BasedObject.__init__(self, name)
+        Scoped.__init__(self, 3)
         self.modules = []
 
     def add_parent(self, parent):
@@ -60,9 +123,12 @@ class ProjectObject(BasedObject):
         if isinstance(child, (ModuleObject, HaveRefsModuleObject)):
             self.modules.append(child)
 
-class ModuleObject(BasedObject):
+
+class ModuleObject(BasedObject, Scoped):
     def __init__(self, name):
-        super().__init__(name)
+        object.__init__(self)
+        BasedObject.__init__(self, name)
+        Scoped.__init__(self, 2)
         self.classes = []
         self.variables = []
         self.functions = []
@@ -111,9 +177,11 @@ class HaveRefsModuleObject(ModuleObject):
             self.references.append(child)
 
 
-class ClassObject(BasedObject):
+class ClassObject(BasedObject, Scoped):
     def __init__(self, name):
-        super().__init__(name)
+        object.__init__(self)
+        BasedObject.__init__(self, name)
+        Scoped.__init__(self, 1)
         self.methods = []
         self.variables = []
         self.linked_to = []
