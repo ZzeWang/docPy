@@ -8,10 +8,9 @@ from .SingleLoader import SingleFileLoader, FileLoader
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - Factory - %(levelname)s - %(message)s')
 logger = logging.getLogger("BasedObject")
 
-
 """
     #: os,re,logging,threading,SingleFileLoader,FileLoader
-    LK:Loader
+    LK: Loader
 """
 
 """
@@ -64,7 +63,8 @@ class MultipleFileLoader(FileLoader):
     def load(self):
         threads = []
         try:
-            for path in os.listdir(self._files_lib_path):
+            for p in os.listdir(self._files_lib_path):
+                path = os.path.join(self._files_lib_path, p)
                 if not os.path.isdir(path):
                     single = SingleFileLoader()
                     ppath = self._files_lib_path + '\\' + path
@@ -117,12 +117,13 @@ class MultipleDirsLoader(MultipleFileLoader):
     def __load_recursion(self, _path):
         threads = []
         try:
-            for path in os.listdir(_path):
-                if path[0] == ".":
+            for p in os.listdir(_path):
+                if p[0] == ".":
                     continue
-                if not os.path.isdir(self._files_lib_path + "\\" + path):
+                path = os.path.join(_path, p)
+                if not os.path.isdir(path):
                     single = SingleFileLoader()
-                    ppath = self._files_lib_path + '\\' + path
+                    ppath = path
                     nname = os.path.basename(path)
                     fformat = os.path.splitext(nname)[-1][1:]
                     try:
@@ -132,7 +133,14 @@ class MultipleDirsLoader(MultipleFileLoader):
                     self._loaded_file.append(single)
                     threads.append(threading.Thread(target=single.load, name=single._file_name))
                 else:
-                    self.__load_recursion(self._files_lib_path + "\\" + path)
+                    self.__load_recursion(path)
         except FileNotFoundError as f_not_e:
             self.logger.fatal(f_not_e)
             self.logger.fatal("path = {} not exists".format(self._files_lib_path))
+        try:
+            for sing in threads:
+                sing.start()
+            for sing in threads:
+                sing.join()
+        except FileExistsError as e:
+            self.logger.fatal(e.errno)

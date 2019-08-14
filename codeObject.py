@@ -207,6 +207,7 @@ class ScopedObject(BasedObject, Scoped):
                 self.proxy(child)
             else:
                 logging.debug("unknown error while getting background")
+
     """
        @: add_parent
        >: (subClassOf[BaseObject]) parent :
@@ -284,7 +285,8 @@ class ProjectObject(BasedObject, Scoped):
     """
     def add_child(self, child):
         if not isinstance(child, (ModuleObject, HaveRefsModuleObject)):
-            logging.error("child '{}' (type={}) can't be linked to '{}'".format(child.name, child.__class__.__name__, self.name))
+            # logging.error("child '{}' (type={}) can't be linked to '{}' (type='{}')"
+            #               .format(child.name, child.__class__.__name__, self.name, self.__class__.__name__))
             raise ValueError
 
         child.add_parent(self)
@@ -339,7 +341,8 @@ class ModuleObject(BasedObject, Scoped):
     """
     def add_child(self, child: BasedObject):
         if not isinstance(child, (ClassObject, ModuleVariableObject, ModuleFunctionObject, ReferencedObject)):
-            logging.error("child '{}' (type={}) can't be linked to '{}'".format(child.name, child.__class__.__name__, self.name))
+            # logging.error("child '{}' (type={}) can't be linked to '{}' (type='{}')"
+            #               .format(child.name, child.__class__.__name__, self.name, self.__class__.__name__))
             raise ValueError
         child.add_parent(self)  # auto link to parent while adding child
         if isinstance(child, ClassObject):
@@ -373,7 +376,8 @@ class HaveRefsModuleObject(ModuleObject):
     """
     def add_child(self, child: BasedObject):
         if isinstance(child, ReferencedObject):
-            logging.error("child '{}' (type={}) can't be linked to '{}'".format(child.name, child.__class__.__name__, self.name))
+            # logging.error("child '{}' (type={}) can't be linked to '{}' (type='{}')"
+            #               .format(child.name, child.__class__.__name__, self.name, self.__class__.__name__))
             self.references.append(child)
         super().add_child(child)
 
@@ -422,7 +426,8 @@ class ClassObject(BasedObject, Scoped):
     def add_child(self, child: BasedObject):
 
         if not isinstance(child, (MemberVariableObject, ClassMethodObject)):
-            logging.error("child '{}' (type={}) can't be linked to '{}'".format(child.name, child.__class__.__name__, self.name))
+            # logging.error("child '{}' (type={}) can't be linked to '{}' (type='{}')"
+            #               .format(child.name, child.__class__.__name__, self.name, self.__class__.__name__))
             raise ValueError
 
         child.add_parent(self)

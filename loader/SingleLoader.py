@@ -40,19 +40,19 @@ class SingleFileLoader(FileLoader):
     """
     def __init__(self, limit=5 * 1024):
         """
-            VAR: (str) _file_path
+            Var: (str) _file_path
              $:文件路径
              M:SingleFileLoader
         """
         self._file_path = ""
         """
-            VAR:(str) _file_format
+            Var:(str) _file_format
             $:文件格式
             M:SingleFileLoader
         """
         self._file_format = ""  # .cpp, .hpp, .h, .py, .java, ...
         """
-            VAR:(str) _file_name
+            Var:(str) _file_name
             $:文件名
             M:SingleFileLoader
         """

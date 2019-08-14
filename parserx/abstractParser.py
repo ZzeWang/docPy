@@ -1,10 +1,7 @@
 """
-    #:re, logging, abc, ReportSignalFunctional, AbstractSignalFunctional,BlockFactory
+    #:rReportSignalFunctional, AbstractSignalFunctional,BlockFactory,multipleLoader,SingleLoader
     LK: Parser
 """
-import re
-import logging, abc
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from loader.SingleLoader import *
 from loader.multipleLoader import *
@@ -13,11 +10,6 @@ from comments.commentGenerator import BlockFactory
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
 logger = logging.getLogger("BADiffCommentParser")
-"""
-    !: Parser
-    $: 定义从文档中读出注释块后的解析行为
-    LK:docPy
-"""
 
 """
     &: class AbstractParser
@@ -192,6 +184,7 @@ class AbstractParser:
                     org_line += 1
 
                 self._comment_list.append(base + who.pages[page_c][:end])
+                who.pages[page_c] = who.pages[page_c][end+len(self._after.replace("\\", "")):]
             else:
                 page_c += 1
 

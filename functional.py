@@ -7,6 +7,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %
 logger = logging.getLogger("AbstractSignalFunctional")
 """
     #:threading.Lock,comments.commentGenerator,ScopedObject
+    LK:functional
 """
 
 """
@@ -156,6 +157,7 @@ class AbstractSignalFunctional(object):
                 self.__add_obj(obj.name, obj)
                 self.scope.add_child(obj)
                 self.scope.proxy(obj)
+                logger.info("create new obj '{}::{}' (type={})".format(self.scope.top().name, obj.name, obj.__class__.__name__))
             else:
                 print("You Haven't Defined Any Project/Module/Class!")
                 raise TypeError
@@ -182,21 +184,37 @@ class AbstractSignalFunctional(object):
     def report(self):
         pass
 
-
+"""
+    &: class SynSignalFunctional
+    $: 提供写保护，但似乎没啥卵用
+"""
 class SynSignalFunctional(AbstractSignalFunctional):
     __module__ = abc.ABCMeta
 
     def __init__(self):
         super().__init__()
+        """
+            Var:(threading.Lock) file_lock
+            $:提供对文件的互斥访问锁
+        """
         self.file_lock = Lock()
 
+    """
+        @: dump
+        >: (str) info:要输出到文件的信息
+        >:(str) path: 输出路径
+        $:
+     """
     def dump(self, info, path):
         self.file_lock.acquire()
         with open(path, "a") as f:
             f.write(info)
         self.file_lock.release()
 
-
+"""
+    &: class ReportSignalFunctional
+    $: 提供print风格的简单解析结果的报表格式类
+"""
 class ReportSignalFunctional(SynSignalFunctional):
     def __init__(self):
         super().__init__()
@@ -232,6 +250,11 @@ class ReportSignalFunctional(SynSignalFunctional):
                             print(mod.name + "::", __)
 
 
+"""
+    &: class ToMarkdownSignalFunctional
+    $: 转换到markdown格式
+    LK:functional
+"""
 class ToMarkdownSignalFunctional(SynSignalFunctional):
 
     @classmethod
