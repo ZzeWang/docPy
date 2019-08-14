@@ -1,4 +1,3 @@
-
 import re, abc
 from threading import Lock, Thread
 import logging
@@ -54,7 +53,7 @@ class AbstractSignalFunctional(object):
             self._obj_set[name] = [obj]
 
     def __link(self, tgt, parents):
-        if isinstance(tgt, ModuleObject):
+        if isinstance(tgt, ProjectObject):
             return
         for parent in parents:
             try:
@@ -93,6 +92,7 @@ class AbstractSignalFunctional(object):
     @abc.abstractmethod
     def report(self):
         pass
+
 
 class SynSignalFunctional(AbstractSignalFunctional):
     __module__ = abc.ABCMeta
@@ -138,22 +138,81 @@ class ReportSignalFunctional(SynSignalFunctional):
                 if isinstance(func, ModuleFunctionObject):
                     for parent in func.linked_to:
                         if parent is mod:
-                            __ = "{} (len(input params)={}, out={})".format(func.name, len(func.in_param), func.out_type)
+                            __ = "{} (len(input params)={}, out={})".format(func.name, len(func.in_param),
+                                                                            func.out_type)
                             print(mod.name + "::", __)
 
 
 class ToMarkdownSignalFunctional(SynSignalFunctional):
-    H1 = "# "
-    H2 = "## "
-    H3 = "### "
-    H4 = "#### "
-    Bar = " --- "
-    Desc = "\n"
+
+    @classmethod
+    def H1(cls, *args):
+        return "# {} {}\n".format(args[0], args[1])
+
+    @classmethod
+    def H2(cls, *args):
+        return "## {} {}\n".format(args[0], args[1])
+
+    @classmethod
+    def H3(cls, *args):
+        return "### {} {}\n".format(args[0], args[1])
+
+    @classmethod
+    def Bar(cls):
+        return "---\n"
+
+    @classmethod
+    def Desc(cls, info):
+        return "{}\n\n".format(info)
 
     def __init__(self):
         super().__init__()
         self.chunk = ""
         self.mods = []
 
-    def transform_to_md(self):
-        pass
+    def report(self):
+        pj = [i[0] for i in self._obj_set.values() if isinstance(i[0], ProjectObject)][0]
+        self.dump("Project *{}*\n\n{}\n\n---\n\n".format(pj.name, pj.desc) , r"E:\file\pyProj\docPy\test\targetfile")
+        self.mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
+
+        for mod in self.mods:
+            block = ""
+            mod_block = self.__class__.H1("Module", mod.name) + self.__class__.Desc(mod.desc) + self.__class__.Bar()
+            block += mod_block
+            for ref in mod.references:
+                ref_block = self.__class__.H2("", ref.name)
+                for parent in ref.linked_to:
+                    if parent is mod:
+                        ref_block += ",".join(ref.refs)
+                block += ref_block + "\n\n"
+            for cls in mod.classes:
+                cls_block = self.__class__.H2("Class", cls.name) + self.__class__.Desc(cls.desc) + self.__class__.Bar()
+                block += cls_block
+                for parent in cls.linked_to:
+                    if parent is mod:
+                        for var in cls.variables:
+                            var_block = "### Var {}  (*type*={})\n\n{}\n\n".format(var.name, var.type, var.desc)
+                            block += var_block
+                        for mth in cls.methods:
+                            func_block = "### method  {}()\n\n".format(mth.name)
+                            for inp in mth.in_param:
+                                func_block += "param **{}** (*type=*{})\n\n> {}\n\n".format(inp[1], inp[0], inp[2])
+                            func_block += mth.desc + "\n\n"
+                            block += func_block
+            for var in mod.variables:
+                if isinstance(var, ModuleVariableObject):
+                    for parent in var.linked_to:
+                        if parent is mod:
+                            var_block = "### Var {}  (*type*={})\n\n{}\n\n".format(var.name, var.type, var.desc)
+                            block += var_block
+            for func in mod.functions:
+                if isinstance(func, ModuleFunctionObject):
+                    for parent in func.linked_to:
+                        if parent is mod:
+                            func_block = "### Function  {}()\n".format(func.name)
+                            for inp in func.in_param:
+                                func_block += "param **{}** (*type=*{})\n\n> {}\n\n".format(inp[1], inp[0], inp[2])
+                                block += func_block
+                            func_block += func.desc + "\n\n"
+
+            self.dump(block, r"E:\file\pyProj\docPy\test\targetfile")
