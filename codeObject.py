@@ -43,12 +43,30 @@ class ReferencedObject(BasedObject):
         return
 
 
+class ProjectObject(BasedObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.modules = []
+
+    def add_parent(self, parent):
+        pass
+
+    def add_child(self, child):
+        try:
+            isinstance(child, (ModuleObject, HaveRefsModuleObject))
+        except ValueError:
+            return
+        child.add_parent(self)
+        if isinstance(child, (ModuleObject, HaveRefsModuleObject)):
+            self.modules.append(child)
+
 class ModuleObject(BasedObject):
     def __init__(self, name):
         super().__init__(name)
         self.classes = []
         self.variables = []
         self.functions = []
+        self.linked_to = []
 
     def travel(self):
         for cls in self.classes:
@@ -61,7 +79,8 @@ class ModuleObject(BasedObject):
             yield func
 
     def add_parent(self, parent: BasedObject):
-        pass  #
+        assert isinstance(parent, ProjectObject)
+        self.linked_to.append(parent)
 
     def add_child(self, child: BasedObject):
         try:
@@ -75,6 +94,21 @@ class ModuleObject(BasedObject):
             self.variables.append(child)
         elif isinstance(child, ModuleFunctionObject):
             self.functions.append(child)
+
+
+class HaveRefsModuleObject(ModuleObject):
+    def __init__(self, name):
+        super().__init__(name)
+        self.references = []
+
+    def add_child(self, child: BasedObject):
+        try:
+            isinstance(child, ReferencedObject)
+        except ValueError:
+            return
+        super().add_child(child)
+        if isinstance(child, ReferencedObject):
+            self.references.append(child)
 
 
 class ClassObject(BasedObject):
