@@ -1,9 +1,10 @@
 import re
 import logging
 import abc
+from exceptions.Exce import *
 
 """
-    #: re, logging, abc, codeObject
+    #: re, logging, abc, codeObject, exceptions.Exce
     LK: comments
 """
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,13 +23,14 @@ from codeObject import *
     LK: docPy
 """
 
-
 """
     &: class CommentBlock
     $: 抽象基类，所有注释块对象均继承自CommentBlock
     $: 子类中需要实现pipeline()函数, getObject()函数和_parse_name()函数
     LK: comments
 """
+
+
 class CommentBlock:
     __module__ = abc.ABCMeta
 
@@ -39,6 +41,7 @@ class CommentBlock:
         $: 构造器
         M:CommentBlock
     """
+
     def __init__(self, comment):
         """
             Var: (str) chunk
@@ -90,21 +93,22 @@ class CommentBlock:
         >: (callable) do : 定义提取动作，一般是赋值或者列表拓展动作
         <: (void)
         $: 对re.findall的封装，根据提取规则key从chunk中提取目标内容，如果没有找到任何内容
-        $: 会引发IndexError错误
+        $: 会引发SyntaxException错误
         M: CommentBlock
     """
+
     def _findall(self, key, do):
-        try:
-            result = re.findall(self.pattern[key], self.chunk)
-            result[0]
-            for sing in result:
-                do(self, sing)
-        except IndexError:
-            self.logger.error("do not find '{}' in comment".format(key))
-            raise IndexError
-        except KeyError:
-            self.logger.error("keyword {} not find in pattern".format(key))
+        if self.pattern[key] is None:
             raise KeyError
+
+        result = re.findall(self.pattern[key], self.chunk)
+        if len(result) == 0:
+            raise SyntaxException(self.pattern[key].pattern, self.chunk, self)
+        # TODO syntax check!! if the reason why length == 0 is cased by a error syntax, there should throw a SyntaxError,
+        # TODO rather than just letting it go!
+
+        for sing in result:
+            do(self, sing)
 
     """
         @: _parse_desc
@@ -113,6 +117,7 @@ class CommentBlock:
         $: 因为desc的格式在每个注释块中的格式统一，因此该函数不可重写，除非重新定义一种desc格式
         M: CommentBlock
     """
+
     def _parse_desc(self):
         def __(self, sing):
             self.desc += sing
@@ -127,6 +132,7 @@ class CommentBlock:
         $: 但提取name的行为一致，所以该类也不用在子类中重写
         M: CommentBlock
     """
+
     def _parse_name(self):
         def __(self, sing):
             self.name = sing
@@ -140,11 +146,20 @@ class CommentBlock:
         $: 对所有需要从注释块中提取的字段进行批处理，由于每个子类的字段不同，在子类中必须重写该函数
         M: CommentBlock
     """
+
     @abc.abstractmethod
     def pipeline(self):
-        self._parse_desc()
-        self._parse_link()
+        try:
+            self._parse_desc()
+        except SyntaxException as e:
+            logging.fatal(e)  # 交给Lazy的pipeline处理
+            print(e)
+            exit(0)
 
+        try:
+            self._parse_link()
+        except SyntaxException as e:
+            raise e
     """
         @: _parse_link
         >:(void) :
@@ -152,6 +167,44 @@ class CommentBlock:
         $: 解析链接类型和链接到字符串
         M: CommentBlock
     """
+
+    def _parse_link(self):
+        if self.pattern["link"] is None:
+            raise KeyError("need 'Lk' keyword")
+
+        result = re.findall(self.pattern["link"], self.chunk)
+
+        try:
+            self.link_type = result[0][0]  # trigger IndexError
+            self.link = self.link_type + ":"
+            for idx, lk in enumerate(result):
+                if idx == 0:
+                    self.link += lk[1]
+                else:
+                    self.link += "," + lk[1]
+        except IndexError:
+            raise SyntaxException(self.pattern["link"].pattern, self.chunk, self)
+
+    """
+        @: getObject
+        >:(void) :
+        <:(subclassOfCommentBlock)
+        $: 从已提取的字段中生成对应的文档节点对象
+        M: CommentBlock
+    """
+
+    @abc.abstractmethod
+    def getObject(self):
+        return None
+
+
+class LazyCommentBlock(CommentBlock):
+    __module__ = abc.ABCMeta
+
+    def __init__(self, comment):
+        super().__init__(comment)
+        self.necessary_field = ["name", "desc"]
+
     def _parse_link(self):
         try:
             result = re.findall(self.pattern["link"], self.chunk)
@@ -163,19 +216,48 @@ class CommentBlock:
                 else:
                     self.link += "," + lk[1]
         except IndexError:
-            self.logger.error("do not find input params!")
-            raise IndexError
+            tmp = re.compile("((?:(?:LK|Lk|lk)|(?:[Mm]))):.*?")  # TODO 宽松匹配条件
+            if len(re.findall(tmp, self.chunk)) == 0:
+                self.link_type = "S"
+            else:
+                raise SyntaxException(self.pattern["link"].pattern, self.chunk, self)
 
-    """
-        @: getObject
-        >:(void) :
-        <:(subclassOfCommentBlock)
-        $: 从已提取的字段中生成对应的文档节点对象
-        M: CommentBlock
-    """
+    def _findall(self, key, do):
+
+        if self.pattern[key] is None:
+            raise KeyError
+
+        result = re.findall(self.pattern[key], self.chunk)
+
+        if len(result) == 0:
+
+            if key in self.necessary_field:
+                raise IntegratedException(key, self)
+            else:
+                # TODO syntax check!
+                logging.warning("You passes a keyword field '{}', if the process of parsing fail, please check "
+                                "the information: name='{}' (type={})".format(key, self.name, self.__class__.__name__))
+                pass
+
+        for sing in result:
+            do(self, sing)
+
+    def pipeline(self):
+        try:
+            super()._parse_desc()
+            self._parse_link()
+        except IntegratedException as e:
+            logging.fatal(e)
+            print(e)
+            exit(0)
+        except SyntaxException as e:
+            logging.fatal(e)
+            print(e)
+            exit(0)
+
     @abc.abstractmethod
-    def getObject(self):
-        return None
+    def lazy_getObject(self, proxy):
+        pass
 
 
 """
@@ -183,6 +265,8 @@ class CommentBlock:
     $: 定义如何从注释中提取一个类的所有信息
     LK: comments
 """
+
+
 class ClassBlock(CommentBlock):
     """
         @: init
@@ -190,6 +274,7 @@ class ClassBlock(CommentBlock):
         $:构造器
         M:ClassBlock
     """
+
     def __init__(self, comment):
         super().__init__(comment)
         self.pattern.update(
@@ -203,12 +288,19 @@ class ClassBlock(CommentBlock):
         $:仅处理类名的提取
         M:ClassBlock
     """
+
     def pipeline(self):
-        super().pipeline()
         try:
+            super().pipeline()
             self._parse_name()
-        except IndexError as e:
+        except KeyError as e:
+            logging.fatal(e)
             print(e)
+            exit(0)
+        except SyntaxException as e:
+            logging.fatal(e)
+            print(e)
+            exit(0)
 
     """
         @: getObject
@@ -217,10 +309,28 @@ class ClassBlock(CommentBlock):
         $: 从注释中提取一个ClassObject对象
         M: ClassBlock
     """
+
     def getObject(self):
         cls = ClassObject(self.name)
         cls.desc = self.desc
         return cls
+
+
+class LazyClassBlock(ClassBlock, LazyCommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+
+    def lazy_getObject(self, proxy):
+        return self.getObject()
+
+    def pipeline(self):
+        try:
+            self._parse_name()
+            LazyCommentBlock.pipeline(self)
+        except IntegratedException as e:
+            logging.fatal(e)
+            print(e)
+            exit(0)
 
 
 """
@@ -228,14 +338,16 @@ class ClassBlock(CommentBlock):
     $: 定义如何从注释中提取一个函数的所有信息
     LK: comments
 """
-class FunctionBlock(CommentBlock):
 
+
+class FunctionBlock(CommentBlock):
     """
         @: init
         >: (str) comment : 待提取注释
         $:构造器
         M:FunctionBlock
     """
+
     def __init__(self, comment):
         super().__init__(comment)
         """
@@ -255,6 +367,7 @@ class FunctionBlock(CommentBlock):
             "ins": re.compile(">: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *(?P<name>[a-zA-Z_0-9]+) *: *(?P<desc>.*?) *\n"),
             "out": re.compile("<: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *\n"),
         })
+
     """
         @: _parse_name
         >:(void) :
@@ -262,6 +375,7 @@ class FunctionBlock(CommentBlock):
         $:
         M:FunctionBlock
     """
+
     def _parse_name(self):
         def __(self, sing):
             self.name = sing
@@ -275,6 +389,7 @@ class FunctionBlock(CommentBlock):
         $:
         M:FunctionBlock
     """
+
     def __parse_ins(self):
         def __(self, sing):
             self.ins.append(sing)
@@ -288,6 +403,7 @@ class FunctionBlock(CommentBlock):
         $:
         M:FunctionBlock
     """
+
     def __parse_out(self):
         def __(self, sing):
             self.out = sing
@@ -301,14 +417,18 @@ class FunctionBlock(CommentBlock):
         $:
         M:FunctionBlock
     """
+
     def pipeline(self):
         super().pipeline()
         try:
             self._parse_name()
             self.__parse_ins()
             self.__parse_out()
-        except IndexError as e:
+        except SyntaxException as e:
+            logging.fatal(e)
             print(e)
+            exit(0)
+
     """
         @: getObject
         >:(void) :
@@ -319,6 +439,7 @@ class FunctionBlock(CommentBlock):
         $:继承自FunctionObject
         M:FunctionBlock
     """
+
     def getObject(self):
         if self.link_type == "LK":
             func = ModuleFunctionObject(self.name)
@@ -330,19 +451,45 @@ class FunctionBlock(CommentBlock):
             func.in_param.append(input_param)
         return func
 
+
+class LazyFunctionBlock(FunctionBlock, LazyCommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+        self.necessary_field.append("desc")
+
+    def lazy_getObject(self, proxy):
+        assert isinstance(proxy, (ClassObject, ModuleObject))
+        if isinstance(proxy, ClassObject):
+            self.link_type = "M"
+        elif isinstance(proxy, ModuleObject):
+            self.link_type = "LK"
+        return self.getObject()
+
+    def pipeline(self):
+        try:
+            self._parse_name()
+            LazyCommentBlock.pipeline(self)
+        except IntegratedException as e:
+            logging.fatal(e)
+            print(e)
+            exit(0)
+
+
 """
     &: class ModuleBlock
     $: 定义如何从注释中提取一个模块类的所有信息
     LK: comments
 """
-class ModuleBlock(CommentBlock):
 
+
+class ModuleBlock(CommentBlock):
     """
         @: init
         >: (str) comment : 待提取注释
         $:构造器
         M:ModuleBlock
     """
+
     def __init__(self, comment):
         super().__init__(comment)
         self.pattern.update(
@@ -358,6 +505,7 @@ class ModuleBlock(CommentBlock):
         $: 仅提取模块名
         M:ModuleBlock
     """
+
     def pipeline(self):
         super().pipeline()
         try:
@@ -372,17 +520,35 @@ class ModuleBlock(CommentBlock):
         $:返回一个HaveRefsModuleObject对象
         M:ModuleBlock
     """
+
     def getObject(self):
         mod = HaveRefsModuleObject(self.name)
         mod.desc = self.desc
         return mod
 
 
+class LazyModuleBlock(ModuleBlock, LazyCommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+
+    def lazy_getObject(self, proxy):
+        return self.getObject()
+
+    def pipeline(self):
+        try:
+            self._parse_name()
+            LazyCommentBlock.pipeline(self)
+        except IntegratedException as e:
+            logging.fatal(e)
+            print(e)
+            exit(0)
 """
     &: class VariableBlock
     $: 定义如何从注释中提取一个变量类的所有信息
     LK: comments
 """
+
+
 class VariableBlock(CommentBlock):
     """
         @: init
@@ -390,6 +556,7 @@ class VariableBlock(CommentBlock):
         $:构造器
         M:VariableBlock
     """
+
     def __init__(self, comment):
         super().__init__(comment)
         """
@@ -400,10 +567,11 @@ class VariableBlock(CommentBlock):
         self.type = ""
         self.pattern.update(
             {
-                "name": re.compile("[vV]ar: *\(.*?\) *(.*?) *\n"),
-                "type": re.compile("[vV]ar: *\((.*?)\) .*? *\n")
+                "name": re.compile("[vV]ar: *\(.*?\) +(.+?) *\n"),
+                "type": re.compile("[vV]ar: *\((.+?)\).*? *\n")
             }
         )
+
     """
         @: _parse_type
         >:(void) :
@@ -411,6 +579,7 @@ class VariableBlock(CommentBlock):
         $:解析变量类型
         M:VariableBlock
     """
+
     def _parse_type(self):
         def __(self, sing):
             self.type = sing
@@ -424,6 +593,7 @@ class VariableBlock(CommentBlock):
         $:
         M:VariableBlock
     """
+
     def pipeline(self):
         super().pipeline()
         try:
@@ -431,6 +601,7 @@ class VariableBlock(CommentBlock):
             self._parse_type()
         except IndexError as e:
             print(e)
+
     """
         @: getObject
         >:(void) :
@@ -439,6 +610,7 @@ class VariableBlock(CommentBlock):
         $: 当链接到类时，返回一个MemberVariableObject对象
         M:VariableBlock
     """
+
     def getObject(self):
         if self.link_type == "LK":
             var = ModuleVariableObject(self.name)
@@ -450,11 +622,36 @@ class VariableBlock(CommentBlock):
         return var
 
 
+class LazyVariableBlock(VariableBlock, LazyCommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+        self.necessary_field.append("type")
+
+    def lazy_getObject(self, proxy):
+        assert isinstance(proxy, (ClassObject, ModuleObject))
+        if isinstance(proxy, ClassObject):
+            self.link_type = "M"
+        elif isinstance(proxy, ModuleObject):
+            self.link_type = "LK"
+        return self.getObject()
+
+    def pipeline(self):
+        try:
+            self._parse_type()
+            self._parse_name()
+            LazyCommentBlock.pipeline(self)
+        except IntegratedException as e:
+            logging.fatal(e)
+            print(e)
+            exit(0)
+
 """
     &: class ReferencedBlock
     $: 定义如何从注释中提取一个依赖类的所有信息
     LK: comments
 """
+
+
 class ReferencedBlock(CommentBlock):
     """
         @: init
@@ -463,6 +660,7 @@ class ReferencedBlock(CommentBlock):
         M:ReferencedBlock
     """
     Cnt = 0
+
     def __init__(self, comment):
         super().__init__(comment)
         """
@@ -477,6 +675,7 @@ class ReferencedBlock(CommentBlock):
                 "name": re.compile("")
             }
         )
+
     """
         @: _parse_name 
         >: (void) :
@@ -484,6 +683,7 @@ class ReferencedBlock(CommentBlock):
         $: 引用在一个模块中仅有一个，因此name未固定'Ref'
         M:ReferencedBlock
     """
+
     def _parse_name(self):
         self.name = "Ref"
 
@@ -494,6 +694,7 @@ class ReferencedBlock(CommentBlock):
         $: 引用的desc未固定的'references'
         M:ReferencedBlock
     """
+
     def _parse_desc(self):
         self.desc = "references :"
 
@@ -504,6 +705,7 @@ class ReferencedBlock(CommentBlock):
         $: 从注释中提取出所有依赖
         M:ReferencedBlock
     """
+
     def _parse_ref(self):
         def __(self, sing):
             self.referenced.extend(sing.split(","))
@@ -517,6 +719,7 @@ class ReferencedBlock(CommentBlock):
         $: 
         M:ReferencedBlock
     """
+
     def pipeline(self):
         try:
             self._parse_name()
@@ -525,6 +728,7 @@ class ReferencedBlock(CommentBlock):
             super()._parse_link()
         except IndexError as e:
             print(e)
+
     """
         @:getObject
         >:(void):
@@ -532,14 +736,19 @@ class ReferencedBlock(CommentBlock):
         $: 未完成，如何实现单例模式
         M:ReferencedBlock
     """
+
     def getObject(self):
         if ReferencedBlock.Cnt == 0:
             ref = ReferencedObject(self.name)
             ref.desc = self.desc
             ref.refs = self.referenced
-            ReferencedBlock.Cnt += 1
             return ref
         logging.error("reference only has ONE in a module!")
+
+
+class LazyReferencedBlock(ReferencedBlock, LazyCommentBlock):
+    def lazy_getObject(self, proxy):
+        return self.getObject()
 
 
 """
@@ -547,6 +756,8 @@ class ReferencedBlock(CommentBlock):
     $: 定义如何从注释中提取一个项目类的所有信息
     LK: comments
 """
+
+
 class ProjectBlock(CommentBlock):
     """
         @: init
@@ -555,6 +766,7 @@ class ProjectBlock(CommentBlock):
         $:构造器
         M:ProjectBlock
     """
+
     def __init__(self, comment):
         super().__init__(comment)
         self.pattern.update(
@@ -562,6 +774,7 @@ class ProjectBlock(CommentBlock):
                 "name": re.compile("(?:(?:PJ)|(?:Pj)|(?:pj)) *: *(.*?)\n")
             }
         )
+
     """
         @: pipeline
         >:(void) :
@@ -569,12 +782,14 @@ class ProjectBlock(CommentBlock):
         $:
         M:ProjectBlock
     """
+
     def pipeline(self):
         try:
             self._parse_name()
             self._parse_desc()
         except IndexError as e:
             print(e)
+
     """
         @:getObject
         >:(void):
@@ -582,10 +797,20 @@ class ProjectBlock(CommentBlock):
         $: 根据提取出的信息返回一个ProjectObject对象
         M:ProjectBlock
     """
+
     def getObject(self):
         pj = ProjectObject(self.name)
         pj.desc = self.desc
         return pj
+
+
+class LazyProjectBlock(ProjectBlock, LazyCommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+
+    def lazy_getObject(self, proxy):
+        return self.getObject()
+
 
 """
     &: class BlockFactory
@@ -594,24 +819,26 @@ class ProjectBlock(CommentBlock):
     $: 该类产生的对象将会被用在functional中实现链接
     LK: comments
 """
+
+
 class BlockFactory:
 
     def __init__(self):
         self.name_map = {
-            "ClassBlock": ClassBlock,
-            "FunctionBlock": FunctionBlock,
-            "ModuleBlock": ModuleBlock,
-            "VariableBlock": VariableBlock,
-            "ReferencedBlock": ReferencedBlock,
-            "ProjectBlock": ProjectBlock
+            "ClassBlock": LazyClassBlock,
+            "FunctionBlock": LazyFunctionBlock,
+            "ModuleBlock": LazyModuleBlock,
+            "VariableBlock": LazyVariableBlock,
+            "ReferencedBlock": LazyReferencedBlock,
+            "ProjectBlock": ProjectBlock,
         }
         self.signal_map = {
-            "@": FunctionBlock,
-            "&": ClassBlock,
-            "!": ModuleBlock,
-            "VAR": VariableBlock,
-            "#": ReferencedBlock,
-            "PJ": ProjectBlock
+            "@": LazyFunctionBlock,
+            "&": LazyClassBlock,
+            "!": LazyModuleBlock,
+            "VAR": LazyVariableBlock,
+            "#": LazyReferencedBlock,
+            "PJ": ProjectBlock,
         }
         self.logger = logging.getLogger("BlockFactory")
 
