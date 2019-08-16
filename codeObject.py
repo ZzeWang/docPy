@@ -402,6 +402,11 @@ class ClassObject(BasedObject, Scoped):
         """
         self.variables = []
         """
+            Var: (list[tuple]) bases
+            $:保存该类的所有父类
+        """
+        self.bases = []
+        """
             Var:(list) linked_to
             $:所有父节点，为列表，也即一类可以定义再多个模块下
         """
@@ -542,6 +547,11 @@ class FunctionObject(BasedObject):
             $:函数的返回值类型
         """
         self.out_type = ""
+        """
+            Var: (list[str]) exceptions
+            $: 函数可能抛出的异常
+        """
+        self.exceptions = []
     """
         @:add_child
         $:函数对象无子节点

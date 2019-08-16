@@ -1,10 +1,9 @@
 from threading import Lock
-import logging
 from comments.commentGenerator import *
 from codeObject import ScopedObject
-
+from exceptions.Exce import LinkTypeException
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
-logger = logging.getLogger("AbstractSignalFunctional")
+logger = logging.getLogger(__name__)
 """
     #:threading.Lock,comments.commentGenerator,ScopedObject
     LK:functional
@@ -24,6 +23,8 @@ logger = logging.getLogger("AbstractSignalFunctional")
     $: 当然这是链接的内部实现，在使用时可以不用显式的定义LK或者M，但是当该节点对象需要链接到多个
     $: 父节点时，需要显示地标出LK。函数lazy_link()实现了隐式链接
 """
+
+
 class AbstractSignalFunctional(object):
     __module__ = abc.ABCMeta
 
@@ -31,6 +32,7 @@ class AbstractSignalFunctional(object):
         @: init
         $: 构造器 
     """
+
     def __init__(self):
         """
             Var: (dict[str:BaseObject]) _unresolved_relations
@@ -58,26 +60,31 @@ class AbstractSignalFunctional(object):
     def __find_parent_to_add_tgt(self, tgt, parent, header):
         try:
             if len(self._obj_set[parent]) == 1:
-                self._obj_set[parent][0].add_child(tgt)
-                logging.info(
-                    "{} link '{}' (type='{}') -> '{}' (type={})".format(header, tgt.name, tgt.__class__.__name__,
-                                                                        self._obj_set[parent][0].name,
-                                                                        self._obj_set[parent][0].__class__.__name__))
+                try:
+                    self._obj_set[parent][0].add_child(tgt)
+
+                    logging.info(
+                        "{} link '{}' (type='{}') -> '{}' (type={})".
+                            format(header, tgt.name, tgt.__class__.__name__,
+                                   self._obj_set[parent][0].name,
+                                   self._obj_set[parent][0].__class__.__name__))
+                    # TODO
+                except LinkTypeException as e:
+                    logging.fatal(e)
+                    exit(0)
             else:
                 for sub in self._obj_set[parent]:
                     try:
                         sub.add_child(tgt)
                         logging.info(
-                            "link '{}' (type='{}') -> '{}' (type={})".format(tgt.name, tgt.__class__.__name__,
-                                                                             sub.name,
-                                                                             sub.__class__.__name__))
+                            "link '{}' (type='{}') -> '{}' (type={})".
+                                format(tgt.name, tgt.__class__.__name__,
+                                       sub.name,
+                                       sub.__class__.__name__))
                         break
-                    except ValueError:
-                        return
-                    except TypeError as e:
-                        return
-                    except Exception as e:
+                    except LinkTypeException as e:
                         logging.fatal(e)
+                        exit(0)
         except KeyError:
             raise KeyError
 
@@ -95,6 +102,7 @@ class AbstractSignalFunctional(object):
         $: 每个parent，如果找到则将tgt链接到_obj_set[parent]，否则将tgt加入的
         $: _unresolved_relations中。
     """
+
     def __link(self, tgt, parents):
         if isinstance(tgt, ProjectObject):
             return
@@ -115,6 +123,7 @@ class AbstractSignalFunctional(object):
         $: 在解析完一个源码文件后对所有未解决的关系进行再一次链接
         $: 如果没有发现待解决的关系，将会报错
     """
+
     def link2(self):
         for tgt in self._unresolved_relations.keys():
             for parent in self._unresolved_relations[tgt]:
@@ -130,6 +139,7 @@ class AbstractSignalFunctional(object):
         <:(BaseObject)
         $: 从注释块对象bobj中获取一个BaseObject对象，并链接。是对\_\_link()的包装
     """
+
     def link(self, bobj: CommentBlock):
         assert issubclass(bobj.__class__, CommentBlock)
 
@@ -140,6 +150,7 @@ class AbstractSignalFunctional(object):
 
         self.__link(obj, links)
         return obj
+
     """
         @: lazy_link
         >: (subClassOfCommentBlock) bobj : 文档注释对象
@@ -157,7 +168,8 @@ class AbstractSignalFunctional(object):
                 self.__add_obj(obj.name, obj)
                 self.scope.add_child(obj)
                 self.scope.proxy(obj)
-                logger.info("create new obj '{}::{}' (type={})".format(self.scope.top().name, obj.name, obj.__class__.__name__))
+                logger.info(
+                    "create new obj '{}<-{}' (type={})".format(self.scope.top().name, obj.name, obj.__class__.__name__))
             else:
                 print("You Haven't Defined Any Project/Module/Class!")
                 raise TypeError
@@ -165,13 +177,13 @@ class AbstractSignalFunctional(object):
             linked_obj = self.link(bobj)
             self.scope.proxy(linked_obj)
 
-
     """
         @: dump
         >: (str) info : 需要保存的信息
         >: (path) path: 保存地点
         $: 该方法放在这里意义不明确，待改进
     """
+
     def dump(self, info, path):
         pass
 
@@ -180,14 +192,20 @@ class AbstractSignalFunctional(object):
         $: 对所有产生的文档对象和链接进行报道，子类通过重写该方法实现
         $: 转换到指定文档格式的任务
     """
+
     @abc.abstractmethod
-    def report(self):
+    def report(self, path):
+        if path is None:
+            raise FileNotFoundError
         pass
+
 
 """
     &: class SynSignalFunctional
     $: 提供写保护，但似乎没啥卵用
 """
+
+
 class SynSignalFunctional(AbstractSignalFunctional):
     __module__ = abc.ABCMeta
 
@@ -205,49 +223,43 @@ class SynSignalFunctional(AbstractSignalFunctional):
         >:(str) path: 输出路径
         $:
      """
+
     def dump(self, info, path):
         self.file_lock.acquire()
         with open(path, "a") as f:
             f.write(info)
         self.file_lock.release()
 
+
 """
     &: class ReportSignalFunctional
     $: 提供print风格的简单解析结果的报表格式类
 """
+
+
 class ReportSignalFunctional(SynSignalFunctional):
     def __init__(self):
         super().__init__()
-        self.mods = []
-
-    def report(self):
         self.mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
-        for mod in self.mods:
-            mod_prefix = "module_{}::".format(mod.name)
-            for cls in mod.classes:
-                cls_prefix = "cls_{}::".format(cls.name)
-                for parent in cls.linked_to:
-                    if parent is mod:
-                        info = mod_prefix + cls_prefix
-                        for var in cls.variables:
-                            __ = "{} (type={})".format(var.name, var.type, )
-                            print(info + __)
-                        for mth in cls.methods:
-                            __ = "{} (len(input params)={}, out={})".format(mth.name, len(mth.in_param), mth.out_type)
-                            print(info + __)
-            for var in mod.variables:
-                if isinstance(var, ModuleVariableObject):
-                    for parent in var.linked_to:
-                        if parent is mod:
-                            __ = "{} (type={})".format(var.name, var.type, )
-                            print(mod_prefix + __)
-            for func in mod.functions:
-                if isinstance(func, ModuleFunctionObject):
-                    for parent in func.linked_to:
-                        if parent is mod:
-                            __ = "{} (len(input params)={}, out={})".format(func.name, len(func.in_param),
-                                                                            func.out_type)
-                            print(mod.name + "::", __)
+        self.queue = []
+
+    def report(self, path="", prefix=""):
+        obj = self.queue[-1]
+        self.queue.pop()
+        print(obj.name)
+        if isinstance(obj, ProjectObject):
+            self.queue.extend(obj.modules)
+        elif isinstance(obj, ModuleObject):
+            self.queue.extend(obj.variables)
+            self.queue.extend(obj.functions)
+            self.queue.extend(obj.classes)
+        elif isinstance(obj, ClassObject):
+            self.queue.extend(obj.variables)
+            self.queue.extend(obj.methods)
+        if len(self.queue) == 0:
+            return
+        else:
+            self.report("", prefix)
 
 
 """
@@ -255,6 +267,8 @@ class ReportSignalFunctional(SynSignalFunctional):
     $: 转换到markdown格式
     LK:functional
 """
+
+
 class ToMarkdownSignalFunctional(SynSignalFunctional):
 
     @classmethod
@@ -282,9 +296,10 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
         self.chunk = ""
         self.mods = []
 
-    def report(self):
+    def report(self, path):
+        super().report(path)
         pj = [i[0] for i in self._obj_set.values() if isinstance(i[0], ProjectObject)][0]
-        self.dump("Project *{}*\n\n{}\n\n---\n\n".format(pj.name, pj.desc), r"E:\file\pyProj\docPy\test\targetfile")
+        self.dump("Project *{}*\n\n{}\n\n---\n\n".format(pj.name, pj.desc), path)
         self.mods = [mod[0] for mod in self._obj_set.values() if isinstance(mod[0], ModuleObject)]
 
         for mod in self.mods:
@@ -299,32 +314,46 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
                 block += ref_block + "\n\n"
             for cls in mod.classes:
                 cls_block = self.__class__.H2("Class", cls.name) + self.__class__.Desc(cls.desc) + self.__class__.Bar()
+
+                for base in cls.bases:
+                    cls_block += "*derived from* **{} {}**\n\n".format(base[1], base[0])
+
                 block += cls_block
                 for parent in cls.linked_to:
                     if parent is mod:
                         for var in cls.variables:
-                            var_block = "### Var {}  (*type*={})\n\n{}\n\n".format(var.name, var.type, var.desc)
+                            var_block = "### {}  (*type*={})\n\n{}\n\n".format(var.name, var.type, var.desc)
                             block += var_block
                         for mth in cls.methods:
-                            func_block = "### method  {}()\n\n".format(mth.name)
+                            func_block = "### {}()\n\n".format(mth.name)
                             for inp in mth.in_param:
-                                func_block += "param **{}** (*type=*{})\n\n> {}\n\n".format(inp[1], inp[0], inp[2])
+                                func_block += "**{}** (*type=*{})\n\n> {}\n\n".format(inp[1], inp[0], inp[2])
+
+                            for exc in mth.exceptions:
+                                func_block += "**throw**  {}\n\n> {}\n\n".format(exc[0], exc[1])
+
+                            if mth.out_type != "":
+                                func_block += "**return**  {}\n\n".format(mth.out_type)
                             func_block += mth.desc + "\n\n"
                             block += func_block
             for var in mod.variables:
                 if isinstance(var, ModuleVariableObject):
                     for parent in var.linked_to:
                         if parent is mod:
-                            var_block = "### Var {}  (*type*={})\n\n{}\n\n".format(var.name, var.type, var.desc)
+                            var_block = "### {}  (*type*={})\n\n{}\n\n".format(var.name, var.type, var.desc)
                             block += var_block
             for func in mod.functions:
                 if isinstance(func, ModuleFunctionObject):
                     for parent in func.linked_to:
                         if parent is mod:
-                            func_block = "### Function  {}()\n".format(func.name)
+                            func_block = "### {}()\n".format(func.name)
                             for inp in func.in_param:
-                                func_block += "param **{}** (*type=*{})\n\n> {}\n\n".format(inp[1], inp[0], inp[2])
+                                func_block += "**{}** (*type=*{})\n\n> {}\n\n".format(inp[1], inp[0], inp[2])
                                 block += func_block
-                            func_block += func.desc + "\n\n"
 
-            self.dump(block, r"E:\file\pyProj\docPy\test\targetfile")
+                            for exc in func.exceptions:
+                                func_block += "**throw**  {}\n\n> {}\n\n".format(exc[0], exc[1])
+                            block += "**return**  {}\n\n".format(mth.out_type)
+                            block += func.desc + "\n\n"
+
+            self.dump(block, path)

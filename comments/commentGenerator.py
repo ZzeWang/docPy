@@ -278,8 +278,26 @@ class ClassBlock(CommentBlock):
     def __init__(self, comment):
         super().__init__(comment)
         self.pattern.update(
-            {"name": re.compile("&: *class *(.*?) *\n")}
+            {
+                "name": re.compile("&: *class *(.*?) *\n"),
+                "bases": re.compile("[^Pp]: *(.*?) *-> *(.*?) *\n")
+            }
         )
+        """
+            Var: (list[tuple]) bases
+            $: 父类列表, 父类类名和继承关系
+        """
+        self.bases = []
+
+    """
+        @: _parse_bases
+        $: 解析类的父类
+    """
+    def _parse_bases(self):
+        def __(self, sing):
+            self.bases.append(sing)
+        self._findall("bases",  __)
+
 
     """
         @: pipeline
@@ -293,6 +311,7 @@ class ClassBlock(CommentBlock):
         try:
             super().pipeline()
             self._parse_name()
+            self._parse_bases()
         except KeyError as e:
             logging.fatal(e)
             print(e)
@@ -313,6 +332,8 @@ class ClassBlock(CommentBlock):
     def getObject(self):
         cls = ClassObject(self.name)
         cls.desc = self.desc
+        for parent in self.bases:
+            cls.bases.append(parent)
         return cls
 
 
@@ -326,6 +347,7 @@ class LazyClassBlock(ClassBlock, LazyCommentBlock):
     def pipeline(self):
         try:
             self._parse_name()
+            ClassBlock._parse_bases(self)
             LazyCommentBlock.pipeline(self)
         except IntegratedException as e:
             logging.fatal(e)
@@ -362,12 +384,22 @@ class FunctionBlock(CommentBlock):
             M:FunctionBlock
         """
         self.out = ""
+        """
+            Var: (list[str]) exceptions
+            $: 函数可能会抛出的异常
+        """
+        self.exceptions = []
         self.pattern.update({
             "name": re.compile("@: *([a-zA-Z_0-9]+) *\n"),
             "ins": re.compile(">: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *(?P<name>[a-zA-Z_0-9]+) *: *(?P<desc>.*?) *\n"),
             "out": re.compile("<: *\( *(?P<type>[a-zA-Z_0-9:]+) *\) *\n"),
+            "exc": re.compile("[?Ee]: *(.*?) *: *(.*?) *\n")
         })
 
+    def _parse_exc(self):
+        def __(self, sing):
+            self.exceptions.append(sing)
+        self._findall("exc", __)
     """
         @: _parse_name
         >:(void) :
@@ -390,7 +422,7 @@ class FunctionBlock(CommentBlock):
         M:FunctionBlock
     """
 
-    def __parse_ins(self):
+    def _parse_ins(self):
         def __(self, sing):
             self.ins.append(sing)
 
@@ -404,7 +436,7 @@ class FunctionBlock(CommentBlock):
         M:FunctionBlock
     """
 
-    def __parse_out(self):
+    def _parse_out(self):
         def __(self, sing):
             self.out = sing
 
@@ -422,8 +454,9 @@ class FunctionBlock(CommentBlock):
         super().pipeline()
         try:
             self._parse_name()
-            self.__parse_ins()
-            self.__parse_out()
+            self._parse_ins()
+            self._parse_out()
+            self._parse_exc()
         except SyntaxException as e:
             logging.fatal(e)
             print(e)
@@ -447,6 +480,8 @@ class FunctionBlock(CommentBlock):
             func = ClassMethodObject(self.name)
         func.desc = self.desc
         func.out_type = self.out
+        for exc in self.exceptions:
+            func.exceptions.append(exc)
         for input_param in self.ins:
             func.in_param.append(input_param)
         return func
@@ -468,6 +503,9 @@ class LazyFunctionBlock(FunctionBlock, LazyCommentBlock):
     def pipeline(self):
         try:
             self._parse_name()
+            FunctionBlock._parse_ins(self)
+            FunctionBlock._parse_out(self)
+            FunctionBlock._parse_exc(self)
             LazyCommentBlock.pipeline(self)
         except IntegratedException as e:
             logging.fatal(e)
@@ -637,8 +675,8 @@ class LazyVariableBlock(VariableBlock, LazyCommentBlock):
 
     def pipeline(self):
         try:
-            self._parse_type()
             self._parse_name()
+            VariableBlock._parse_type(self)
             LazyCommentBlock.pipeline(self)
         except IntegratedException as e:
             logging.fatal(e)
