@@ -8,6 +8,7 @@ from exceptions.Exce import *
     LK: comments
 """
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("CommentBlock")
 from codeObject import *
 
 """
@@ -85,7 +86,6 @@ class CommentBlock:
             "desc": re.compile("\$:(.*?)\n"),
             "link": re.compile("((?:(?:LK|Lk|lk)|(?:[Mm]))): *(.*?) *\n")
         }
-        self.logger = logging.getLogger("CommentBlock")
 
     """
         @: _findall
