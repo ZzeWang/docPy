@@ -1,5 +1,5 @@
 import abc, logging
-
+import exceptions.Exce
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - Factory - %(levelname)s - %(message)s')
 logger = logging.getLogger("BasedObject")
 """
@@ -155,7 +155,7 @@ class ScopedObject(BasedObject, Scoped):
     def change_scope(self, obj):
         if self.top() > obj:
             self._stack.append(obj)
-        elif self.top() < obj or self.top() == obj:
+        elif self.top() <= obj:
             while 1:
                 self._stack.pop()
                 if self.top() > obj:
@@ -168,12 +168,17 @@ class ScopedObject(BasedObject, Scoped):
         $: 而往一个代理对象上添加一个相同优先级的对象显然是不对的（如当前代理对象和obj均为ClassObject，那么在第一句中
         $: add_child()就会抛出一个ValueError错误。因此，在同优先级的域对象之间相互切换应该找到背景域（当前代理对象的父节点）
     """
-    def get_background(self):
-        try:
+    def get_background(self, bigger):
+        if bigger == self._stack[0]:
+            self._stack = [self._stack[0]]
+            self._proxy = self.top()
+            return
+        while self.top() <= bigger:
             self._stack.pop()
             self._proxy = self.top()
-        except IndexError:
-            logging.debug("scope stack empty!")
+            if self.top() == self._stack[0]:
+                return
+
 
     """
         @: top
@@ -200,13 +205,13 @@ class ScopedObject(BasedObject, Scoped):
     def add_child(self, child):
         try:
             self._proxy.add_child(child)
-        except ValueError:
-            if self.top() == child:
-                self.get_background()
+        except exceptions.Exce.LinkTypeException:
+            if self.top() <= child:
+                self.get_background(child)
                 self._proxy.add_child(child)
                 self.proxy(child)
             else:
-                logging.debug("unknown error while getting background")
+                raise exceptions.Exce.LinkTypeException(child, self._proxy)
 
     """
        @: add_parent
@@ -245,15 +250,15 @@ class ReferencedObject(BasedObject):
         $:
     """
     def add_parent(self, parent):
-        assert isinstance(parent, ModuleObject)
+        if not isinstance(parent, ModuleObject):
+            raise exceptions.Exce.LinkTypeException(self, parent)
         self.linked_to.append(parent)
     """
         @:add_child
         $:引用节点暂时无子节点
     """
     def add_child(self, child):
-        logging.debug("referenced object have no child")
-        return
+        raise exceptions.Exce.LinkTypeException(child, self)
 
 
 """
@@ -276,7 +281,7 @@ class ProjectObject(BasedObject, Scoped):
         $:目前项目节点为根节点，再无父节点
     """
     def add_parent(self, parent):
-        pass
+        raise exceptions.Exce.LinkTypeException(self, parent)
 
     """
         @:add_child
@@ -285,9 +290,7 @@ class ProjectObject(BasedObject, Scoped):
     """
     def add_child(self, child):
         if not isinstance(child, (ModuleObject, HaveRefsModuleObject)):
-            # logging.error("child '{}' (type={}) can't be linked to '{}' (type='{}')"
-            #               .format(child.name, child.__class__.__name__, self.name, self.__class__.__name__))
-            raise ValueError
+            raise exceptions.Exce.LinkTypeException(child, self)
 
         child.add_parent(self)
         self.modules.append(child)
@@ -332,7 +335,8 @@ class ModuleObject(BasedObject, Scoped):
         $:
     """
     def add_parent(self, parent: BasedObject):
-        assert isinstance(parent, ProjectObject)
+        if not isinstance(parent, ProjectObject):
+            raise exceptions.Exce.LinkTypeException(self, parent)
         self.linked_to.append(parent)
     """
         @: add_child
@@ -341,9 +345,7 @@ class ModuleObject(BasedObject, Scoped):
     """
     def add_child(self, child: BasedObject):
         if not isinstance(child, (ClassObject, ModuleVariableObject, ModuleFunctionObject, ReferencedObject)):
-            # logging.error("child '{}' (type={}) can't be linked to '{}' (type='{}')"
-            #               .format(child.name, child.__class__.__name__, self.name, self.__class__.__name__))
-            raise ValueError
+            raise exceptions.Exce.LinkTypeException(child, self)
         child.add_parent(self)  # auto link to parent while adding child
         if isinstance(child, ClassObject):
             self.classes.append(child)
@@ -374,10 +376,8 @@ class HaveRefsModuleObject(ModuleObject):
         >:(ReferencedObject) child: 
         $:
     """
-    def add_child(self, child: BasedObject):
+    def add_child(self, child: ReferencedObject):
         if isinstance(child, ReferencedObject):
-            # logging.error("child '{}' (type={}) can't be linked to '{}' (type='{}')"
-            #               .format(child.name, child.__class__.__name__, self.name, self.__class__.__name__))
             self.references.append(child)
         super().add_child(child)
 
@@ -413,7 +413,8 @@ class ClassObject(BasedObject, Scoped):
     """
 
     def add_parent(self, parent: ModuleObject):
-        assert isinstance(parent, ModuleObject)
+        if not isinstance(parent, ModuleObject):
+            raise exceptions.Exce.LinkTypeException(self, parent)
         self.linked_to.append(parent)
         #  parent.add_child(self) !
         #  !!important this is illegal, because when adding a relations, the parent will add
@@ -426,9 +427,7 @@ class ClassObject(BasedObject, Scoped):
     def add_child(self, child: BasedObject):
 
         if not isinstance(child, (MemberVariableObject, ClassMethodObject)):
-            # logging.error("child '{}' (type={}) can't be linked to '{}' (type='{}')"
-            #               .format(child.name, child.__class__.__name__, self.name, self.__class__.__name__))
-            raise ValueError
+            raise exceptions.Exce.LinkTypeException(child, self)
 
         child.add_parent(self)
         if isinstance(child, MemberVariableObject):
@@ -459,8 +458,7 @@ class VariableObject(BasedObject):
         $:变量对象无子节点
     """
     def add_child(self, child):
-        logging.error("variable object have no child!")
-        raise TypeError
+        raise exceptions.Exce.LinkTypeException(child, self)
 
 """
     &: class MemberVariableObject
@@ -486,8 +484,7 @@ class MemberVariableObject(VariableObject):
     """
     def add_parent(self, parent: ClassObject):
         if not isinstance(parent, ClassObject):
-            raise ValueError
-
+            raise exceptions.Exce.LinkTypeException(self, parent)
         self.linked_to = parent
         # parent.variables.append(self)
         #  !!important this is illegal, because when adding a relations, the parent will add
@@ -516,7 +513,7 @@ class ModuleVariableObject(VariableObject):
     """
     def add_parent(self, parent: ModuleObject):
         if not isinstance(parent, ModuleObject):
-            raise ValueError
+            raise exceptions.Exce.LinkTypeException(self, parent)
 
         self.linked_to.append(parent)
         # parent.variables.append(self)
@@ -550,8 +547,7 @@ class FunctionObject(BasedObject):
         $:函数对象无子节点
     """
     def add_child(self, child):
-        logging.error("function object have no child!")
-        raise TypeError
+        raise exceptions.Exce.LinkTypeException(child, self)
 
 """
     &: class ModuleFunctionObject
@@ -577,7 +573,7 @@ class ModuleFunctionObject(FunctionObject):
     """
     def add_parent(self, parent: ModuleObject):
         if not isinstance(parent, ModuleObject):
-            raise ValueError
+            raise exceptions.Exce.LinkTypeException(self, parent)
 
         self.linked_to.append(parent)
         # parent.add_child(self)
@@ -607,7 +603,7 @@ class ClassMethodObject(FunctionObject):
     """
     def add_parent(self, parent: ClassObject):
         if not isinstance(parent, ClassObject):
-            raise ValueError
+            raise exceptions.Exce.LinkTypeException(self, parent)
 
         self.linked_to = parent
         # parent.add_child(self)
