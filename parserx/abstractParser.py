@@ -7,7 +7,10 @@ from loader.SingleLoader import *
 from loader.multipleLoader import *
 from functional import ReportSignalFunctional, AbstractSignalFunctional
 from comments.commentGenerator import BlockFactory
+import time
 
+from queue import Queue
+from threading import Thread
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - AbstractParser - %(levelname)s - %(message)s')
 logger = logging.getLogger("BADiffCommentParser")
 
@@ -18,7 +21,6 @@ logger = logging.getLogger("BADiffCommentParser")
     $: 原本AbstractParser的解析工作突然全部抽象出来并移交给CommentBlock的pipeline函数和getObject函数
     LK: Parser
 """
-
 
 class AbstractParser:
     __module__ = abc.ABCMeta
@@ -76,11 +78,11 @@ class AbstractParser:
             raise Exception
 
         """
-            Var: (list) _comment_list
-            $: 存放一整个注释块容器
+            Var: (Queue) _comment_list
+            $: 将解析注释内容和处理链接的任务异步，提高效率
             M:AbstractParser
         """
-        self._comment_list = []
+        self._comment_list = Queue(maxsize=100)
         """
             var: (re.compile) _comment_pattern
             $: 从文档流中提取注释块
@@ -93,7 +95,7 @@ class AbstractParser:
             $: _comment_pattern的迭代器
              M:AbstractParser
         """
-        self.iter_of_comment = iter(self._comment_list)
+        # self.iter_of_comment = iter(self._comment_list)
 
     """
         @: pre_symmetric_check
@@ -164,8 +166,12 @@ class AbstractParser:
             self._safe_suffix(who, self._after.replace("\\", ""))
         while page_c < len(who.pages):
             not_page = self.pre_symmetric_check(who.pages[page_c])
+            # TODO
+            items = re.findall(self._comment_pattern, who.pages[page_c])
+            for item in items:
+                self._comment_list.put(item)
+            # self._comment_list.extend(re.findall(self._comment_pattern, who.pages[page_c]))
 
-            self._comment_list.extend(re.findall(self._comment_pattern, who.pages[page_c]))
             start = who.pages[page_c].rfind(self._before.replace("\\", ""))
             if start == -1:
                 page_c += 1
@@ -175,7 +181,7 @@ class AbstractParser:
                 while True:
                     end = who.pages[page_c + 1].find(self._after.replace("\\", ""))
                     page_c += 1
-                    if end != -1 or page_c + 1==  len(who.pages) :
+                    if end != -1 or page_c + 1 == len(who.pages) :
                         break
                 base = who.pages[org_line][start + len(self._before.replace("\\", "")):]
                 org_line += 1
@@ -183,16 +189,20 @@ class AbstractParser:
                     base += who.pages[org_line]
                     org_line += 1
 
-                self._comment_list.append(base + who.pages[page_c][:end])
+                self._comment_list.put(base + who.pages[page_c][:end])
+                #self._comment_list.append(base + who.pages[page_c][:end])
                 who.pages[page_c] = who.pages[page_c][end+len(self._after.replace("\\", "")):]
             else:
                 page_c += 1
 
             if page_c + 1 == len(who.pages):
-                self._comment_list.extend(re.findall(self._comment_pattern, who.pages[page_c]))
+                items = re.findall(self._comment_pattern, who.pages[page_c])
+                for item in items:
+                    self._comment_list.put(item)
                 break
-        for idx, item in enumerate(self._comment_list):
-            self._comment_list[idx] = self._comment_list[idx].strip()
+        #
+        # for idx, item in enumerate(self._comment_list):
+        #     self._comment_list[idx] = self._comment_list[idx].strip()
 
     """
         @: parse_comment
@@ -204,20 +214,6 @@ class AbstractParser:
 
     def parse_comment(self):
         self.parse_comments(self.file)
-
-    """
-        @: __get_next_comment
-        >: (void) v:
-        <:(void)
-        $: 从iter_of_comment迭代器中获取下一条注释块
-        M:AbstractParser
-    """
-
-    def __get_next_comment(self):
-        try:
-            return next(self.iter_of_comment).strip()
-        except StopIteration as e:
-            return None
 
     """
         @: __prefix_standard
@@ -256,18 +252,18 @@ class AbstractParser:
     def switch(self):
 
         factory = BlockFactory()
-        scope = factory.create_boby_by_name("Scoped", "")
         while True:
-            comment = self.__get_next_comment()
-            if comment is None:
+            if self._comment_list.empty():
                 break
+            comment = self._comment_list.get().strip()
             comment += "\n"
             obj = factory.create_bobj_by_signal(self.__prefix_standard(comment), comment)
             if obj:
                 obj.pipeline()
+
                 self._mapper.lazy_link(obj)
 
-        self.resolve_unlinked()
+
 
     """
         @: run
@@ -277,10 +273,17 @@ class AbstractParser:
         M:AbstractParser
     """
 
-    def run(self):
-        self.parse_comment()
-        self.switch()
+    def  run(self):
+        parse_comment = Thread(target=self.parse_comment)
+        switch = Thread(target=self.switch)
 
+        now = time.time()
+        parse_comment.start()
+        switch.start()
+        parse_comment.join()
+        switch.join()
+        print("time consuming: ", (time.time()-now)*1000, "ms")
+        self.resolve_unlinked()
 
 """
     &: class BADiffCommentParser
