@@ -76,32 +76,42 @@ class Scoped(object):
         @: __eq__
         $: 注意！定义了\_\_eq__的将不再是hashable的对象了，如果想要实现hashable需要继承父类的__hash__对象
     """
+
     def __eq__(self, other):
         return self.priority == other.priority
+
     """
         @: __gt__
         $:
     """
+
     def __gt__(self, other):
         return self.priority > other.priority
+
     """
         @: __lt__
         $:
     """
+
     def __lt__(self, other):
         return self.priority < other.priority
+
     """
         @: __le__
         $:
     """
+
     def __le__(self, other):
         return self.priority <= other.priority
+
     """
         @: __ge__
         $:
     """
+
     def __ge__(self, other):
         return self.priority >= other.priority
+
 
 """
     &:class ScopedObject
@@ -116,12 +126,15 @@ class Scoped(object):
     $:表现为一个文档节点对象的代理，通过该代理进行操作，实现了解耦，使得无需再修改functional的代码。它
     $:分别继承BaseObject和Scoped类
 """
+
+
 class ScopedObject(BasedObject, Scoped):
     """
         @: init
         >:(const str) name: 由于每个文档解析程序仅有一个全域，因此ScopedObject应当为单例模式
         $:
     """
+
     def __init__(self, name="scope"):
         BasedObject.__init__(self, name)
         Scoped.__init__(self, 4)
@@ -142,6 +155,7 @@ class ScopedObject(BasedObject, Scoped):
         $:弹出栈底元素(self)，所以再析构时，应该将其弹出，这样对该域对象(self)的引用计数
         $:就会安全的降为0，否则可能在内存中一直保存(不过肯能在_stack析构之后，该对象的引用计数也会安全降为0)
     """
+
     def __del__(self):
         self._stack.pop()  # 移除自举时
 
@@ -152,6 +166,7 @@ class ScopedObject(BasedObject, Scoped):
         $: 当遇到域优先级更大的域对象时，需要弹出栈顶元素直到遇到比obj域范围更大的对象为止
         $: 然后将其压栈；否则直接压栈，表示进入了更小的域范围
     """
+
     def change_scope(self, obj):
         if self.top() > obj:
             self._stack.append(obj)
@@ -161,6 +176,7 @@ class ScopedObject(BasedObject, Scoped):
                 if self.top() > obj:
                     break
             self._stack.append(obj)
+
     """
         @: get_background
         $: 当在同优先级域对象之间切换时，如果不进行退栈处理，那么诸如
@@ -168,6 +184,7 @@ class ScopedObject(BasedObject, Scoped):
         $: 而往一个代理对象上添加一个相同优先级的对象显然是不对的（如当前代理对象和obj均为ClassObject，那么在第一句中
         $: add_child()就会抛出一个ValueError错误。因此，在同优先级的域对象之间相互切换应该找到背景域（当前代理对象的父节点）
     """
+
     def get_background(self, bigger):
         if bigger == self._stack[0]:
             self._stack = [self._stack[0]]
@@ -179,11 +196,11 @@ class ScopedObject(BasedObject, Scoped):
             if self.top() == self._stack[0]:
                 return
 
-
     """
         @: top
         $:返回栈顶元素
     """
+
     def top(self):
         return self._stack[-1]
 
@@ -192,6 +209,7 @@ class ScopedObject(BasedObject, Scoped):
         >:(subClassOf[Scoped]) proxy: 设置域代理对象
         $:提供给外部的接口用于设置域代理对象
     """
+
     def proxy(self, _p):
         if isinstance(_p, Scoped):
             self.change_scope(_p)
@@ -202,6 +220,7 @@ class ScopedObject(BasedObject, Scoped):
         >: (subClassOf[BaseObject]) child :
         $: *act-like-a-BaseObject*，实现对文档节点对象的代理功能
     """
+
     def add_child(self, child):
         try:
             self._proxy.add_child(child)
@@ -218,19 +237,24 @@ class ScopedObject(BasedObject, Scoped):
        >: (subClassOf[BaseObject]) parent :
        $: *act-like-a-BaseObject*，实现对文档节点对象的代理功能
     """
+
     def add_parent(self, parent):
         self._proxy.add_parent(parent)
+
 
 """
     &: class ReferencedObject
     $: 引用模块类
 """
+
+
 class ReferencedObject(BasedObject):
     """
         @:init
         >:(str) name: the name of obejct
         $:
     """
+
     def __init__(self, name):
         super().__init__(name)
         """
@@ -249,14 +273,17 @@ class ReferencedObject(BasedObject):
         >:(subClassOf[ModuleObject]) parent:ReferencedObject只能连接到模块
         $:
     """
+
     def add_parent(self, parent):
         if not isinstance(parent, ModuleObject):
             raise exceptions.Exce.LinkTypeException(self, parent)
         self.linked_to.append(parent)
+
     """
         @:add_child
         $:引用节点暂时无子节点
     """
+
     def add_child(self, child):
         raise exceptions.Exce.LinkTypeException(child, self)
 
@@ -265,6 +292,8 @@ class ReferencedObject(BasedObject):
     &: class ProjectObject
     $: 项目文档节点类，是一个Scoped
 """
+
+
 class ProjectObject(BasedObject, Scoped):
     def __init__(self, name):
         object.__init__(self)
@@ -280,6 +309,7 @@ class ProjectObject(BasedObject, Scoped):
         @:add_parent
         $:目前项目节点为根节点，再无父节点
     """
+
     def add_parent(self, parent):
         raise exceptions.Exce.LinkTypeException(self, parent)
 
@@ -288,6 +318,7 @@ class ProjectObject(BasedObject, Scoped):
         >:(ModuleObject|HaveRefsModuleObject) child: 该ProjectObject的所有子节点
         $: 添加子节点，应该均为模块
     """
+
     def add_child(self, child):
         if not isinstance(child, (ModuleObject, HaveRefsModuleObject)):
             raise exceptions.Exce.LinkTypeException(child, self)
@@ -295,15 +326,19 @@ class ProjectObject(BasedObject, Scoped):
         child.add_parent(self)
         self.modules.append(child)
 
+
 """
     &: class ModuleObject
     $: 模块文档节点对象， 是一个Scoped
 """
+
+
 class ModuleObject(BasedObject, Scoped):
     """
     @: init
     $:
     """
+
     def __init__(self, name):
         object.__init__(self)
         BasedObject.__init__(self, name)
@@ -334,15 +369,18 @@ class ModuleObject(BasedObject, Scoped):
         >: (BasedObject) parent:；链接到的父节点
         $:
     """
+
     def add_parent(self, parent: BasedObject):
         if not isinstance(parent, ProjectObject):
             raise exceptions.Exce.LinkTypeException(self, parent)
         self.linked_to.append(parent)
+
     """
         @: add_child
         >: (ClassObject|ModuleVariableObject|ModuleFunctionObject) child:子节点
         $:
     """
+
     def add_child(self, child: BasedObject):
         if not isinstance(child, (ClassObject, ModuleVariableObject, ModuleFunctionObject, ReferencedObject)):
             raise exceptions.Exce.LinkTypeException(child, self)
@@ -354,15 +392,19 @@ class ModuleObject(BasedObject, Scoped):
         elif isinstance(child, ModuleFunctionObject):
             self.functions.append(child)
 
+
 """
     &: class HaveRefsModuleObject
     $: 有引用的模块的文档对象，这是一个包装类
 """
+
+
 class HaveRefsModuleObject(ModuleObject):
     """
         @:init
         $:
     """
+
     def __init__(self, name):
         super().__init__(name)
         """
@@ -376,6 +418,7 @@ class HaveRefsModuleObject(ModuleObject):
         >:(ReferencedObject) child: 
         $:
     """
+
     def add_child(self, child: ReferencedObject):
         if isinstance(child, ReferencedObject):
             self.references.append(child)
@@ -386,6 +429,8 @@ class HaveRefsModuleObject(ModuleObject):
     &: class ClassObject
     $:类文档节点对象
 """
+
+
 class ClassObject(BasedObject, Scoped):
     def __init__(self, name):
         object.__init__(self)
@@ -411,6 +456,7 @@ class ClassObject(BasedObject, Scoped):
             $:所有父节点，为列表，也即一类可以定义再多个模块下
         """
         self.linked_to = []
+
     """
         @:add_parent
         >:(ModuleObject) parent: 
@@ -424,14 +470,16 @@ class ClassObject(BasedObject, Scoped):
         #  parent.add_child(self) !
         #  !!important this is illegal, because when adding a relations, the parent will add
         # this child automatically by calling parent.add_child() in your code and doing this by yourself!
+
     """
         @:add_child
         >:(MemberVariableObject|ClassMethodObject) child: 
         $:
     """
+
     def add_child(self, child: BasedObject):
 
-        if not isinstance(child, (MemberVariableObject, ClassMethodObject)):
+        if not isinstance(child, (MemberVariableObject, ClassMethodObject, UsageObject)):
             raise exceptions.Exce.LinkTypeException(child, self)
 
         child.add_parent(self)
@@ -440,16 +488,20 @@ class ClassObject(BasedObject, Scoped):
         elif isinstance(child, ClassMethodObject):
             self.methods.append(child)
 
+
 """
     &: class VariableObject
     $: 变量节点对象，抽象基类
 """
+
+
 class VariableObject(BasedObject):
     __module__ = abc.ABCMeta
     """
         @:init
         $:
     """
+
     def __init__(self, name):
         super().__init__(name)
         """
@@ -462,18 +514,23 @@ class VariableObject(BasedObject):
         @:add_child
         $:变量对象无子节点
     """
+
     def add_child(self, child):
         raise exceptions.Exce.LinkTypeException(child, self)
+
 
 """
     &: class MemberVariableObject
     $: 成员变量文档节点对象，特化VariableObject
 """
+
+
 class MemberVariableObject(VariableObject):
     """
         @:init
         $:
     """
+
     def __init__(self, name: str):
         super().__init__(name)
         """
@@ -487,6 +544,7 @@ class MemberVariableObject(VariableObject):
         >:(ClassObject) parent :
         $:
     """
+
     def add_parent(self, parent: ClassObject):
         if not isinstance(parent, ClassObject):
             raise exceptions.Exce.LinkTypeException(self, parent)
@@ -495,15 +553,19 @@ class MemberVariableObject(VariableObject):
         #  !!important this is illegal, because when adding a relations, the parent will add
         # this child automatically by calling parent.add_child() in your code and doing this by yourself!
 
+
 """
     &: class ModuleVariableObject
     $: 模块变量文档节点对象，变量对象的特化
 """
+
+
 class ModuleVariableObject(VariableObject):
     """
         @:init
         $:
     """
+
     def __init__(self, name: str):
         super().__init__(name)
         """
@@ -511,11 +573,13 @@ class ModuleVariableObject(VariableObject):
             $:为列表，也即一个模块变量可以定义在多个模块中
         """
         self.linked_to = []  # a variable defined in a module may be used in other module
+
     """
         @:add_parent
         >:(ModuleObject) parent :
         $:
     """
+
     def add_parent(self, parent: ModuleObject):
         if not isinstance(parent, ModuleObject):
             raise exceptions.Exce.LinkTypeException(self, parent)
@@ -525,16 +589,20 @@ class ModuleVariableObject(VariableObject):
         #  !!important this is illegal, because when adding a relations, the parent will add
         # this child automatically by calling parent.add_child() in your code and doing this by yourself!
 
+
 """
     &: class FunctionObject
     $: 函数文档节点对象，抽象基类
 """
+
+
 class FunctionObject(BasedObject):
     __module__ = abc.ABCMeta
     """
         @:init
         $:
     """
+
     def __init__(self, name):
         super().__init__(name)
         """
@@ -552,22 +620,28 @@ class FunctionObject(BasedObject):
             $: 函数可能抛出的异常
         """
         self.exceptions = []
+
     """
         @:add_child
         $:函数对象无子节点
     """
+
     def add_child(self, child):
         raise exceptions.Exce.LinkTypeException(child, self)
+
 
 """
     &: class ModuleFunctionObject
     $: 模块函数文档节点对象，FunctionObject的特化
 """
+
+
 class ModuleFunctionObject(FunctionObject):
     """
         @:init
         $:
     """
+
     def __init__(self, name):
         super().__init__(name)
         """
@@ -581,6 +655,7 @@ class ModuleFunctionObject(FunctionObject):
         >:(ModuleObject) parent :
         $:
     """
+
     def add_parent(self, parent: ModuleObject):
         if not isinstance(parent, ModuleObject):
             raise exceptions.Exce.LinkTypeException(self, parent)
@@ -590,15 +665,19 @@ class ModuleFunctionObject(FunctionObject):
         #  !!important this is illegal, because when adding a relations, the parent will add
         # this child automatically by calling parent.add_child() in your code and doing this by yourself!
 
+
 """
     &: class ClassMethodObject
     $: 类方法文档节点对象，FunctionObject的特化
 """
+
+
 class ClassMethodObject(FunctionObject):
     """
         @:init
         $:
     """
+
     def __init__(self, name):
         super().__init__(name)
         """
@@ -606,11 +685,13 @@ class ClassMethodObject(FunctionObject):
             $:为单个类节点对象
         """
         self.linked_to = None
+
     """
         @:add_parent
         >:(ClassObject) parent :
         $:
     """
+
     def add_parent(self, parent: ClassObject):
         if not isinstance(parent, ClassObject):
             raise exceptions.Exce.LinkTypeException(self, parent)
@@ -619,3 +700,17 @@ class ClassMethodObject(FunctionObject):
         # parent.add_child(self)
         #  !!important this is illegal, because when adding a relations, the parent will add
         # this child automatically by calling parent.add_child() in your code and doing this by yourself!
+
+
+"""
+    &: class UsageObject
+    ^: BaseObject -> public
+    $: 定义某个文档项目的用例, name为对应的block object的hashcode
+"""
+class UsageObject(BasedObject):
+
+    def add_parent(self, parent):
+        self.linked_to = parent
+
+    def add_child(self, child):
+        raise exceptions.Exce.LinkTypeException(child, self)

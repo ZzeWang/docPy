@@ -10,7 +10,6 @@ from exceptions.Exce import *
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("CommentBlock")
 from codeObject import *
-
 """
     !: comments
     $: 对文档注释的抽象，定义不同注释类型所对应的类别/定义不同类别
@@ -925,6 +924,7 @@ class BlockFactory:
             "VAR": LazyVariableBlock,
             "#": LazyReferencedBlock,
             "PJ": ProjectBlock,
+            "USAGE": UsageBlock,
         }
         self.logger = logging.getLogger("BlockFactory")
 
@@ -941,3 +941,42 @@ class BlockFactory:
         except KeyError:
             self.logger.debug("no signal '{}'".format(signal))
             return None
+
+"""
+    &: class UsageBlock
+    ^: CommentBlock -> public
+    $: 定义实例文档注释节点对象
+"""
+
+"""
+    Usage:
+    BEGIN
+        ubo = UsageBlock(YourComment)
+        ubo.pipeline()
+        uo = ubo.getObject()
+    END
+"""
+class UsageBlock(CommentBlock):
+    def __init__(self, comment):
+        super().__init__(comment)
+        self.pattern.update(
+            {
+                "name": re.compile("Usage:\s*\n"),
+                "desc": re.compile("Usage:\s*BEGIN\s*(.*?)\s*END\n", re.DOTALL)
+            }
+        )
+
+    def getObject(self):
+        uo = UsageObject("%d" % (self.__hash__()))
+        uo.desc = self.desc
+        return uo
+
+    def pipeline(self):
+        try:
+            super().pipeline()
+        except KeyError as e:
+            logging.fatal(e)
+            exit(0)
+        except SyntaxException as e:
+            logging.fatal(e)
+            exit(0)
