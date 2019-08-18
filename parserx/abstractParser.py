@@ -260,10 +260,9 @@ class AbstractParser:
             obj = factory.create_bobj_by_signal(self.__prefix_standard(comment), comment)
             if obj:
                 obj.pipeline()
-
                 self._mapper.lazy_link(obj)
 
-
+        self.resolve_unlinked()
 
     """
         @: run
@@ -277,13 +276,13 @@ class AbstractParser:
         parse_comment = Thread(target=self.parse_comment)
         switch = Thread(target=self.switch)
 
-        now = time.time()
         parse_comment.start()
         switch.start()
+
         parse_comment.join()
         switch.join()
-        print("time consuming: ", (time.time()-now)*1000, "ms")
-        self.resolve_unlinked()
+
+
 
 """
     &: class BADiffCommentParser

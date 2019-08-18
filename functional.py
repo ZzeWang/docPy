@@ -353,7 +353,7 @@ class ToMarkdownSignalFunctional(SynSignalFunctional):
 
                             for exc in func.exceptions:
                                 func_block += "**throw**  {}\n\n> {}\n\n".format(exc[0], exc[1])
-                            block += "**return**  {}\n\n".format(mth.out_type)
+                            block += "**return**  {}\n\n".format(func.out_type)
                             block += func.desc + "\n\n"
 
             self.dump(block, path)

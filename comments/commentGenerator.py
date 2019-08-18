@@ -197,14 +197,28 @@ class CommentBlock:
     def getObject(self):
         return None
 
-
+"""
+    &: class LazyCommentBlock
+    ^: CommentBlock-> public
+    $: 实现自动链接到外域
+"""
 class LazyCommentBlock(CommentBlock):
     __module__ = abc.ABCMeta
 
     def __init__(self, comment):
         super().__init__(comment)
+        """
+            Var: (list[str]) necessary_field
+            $: 每个注释文档节点对象必须的字段，子类可以扩充
+            $: 在该列表中的字段不可或缺，在注释中必须标明，否则引发IntegratedException
+        """
         self.necessary_field = ["name", "desc"]
 
+    """
+        @: _parse_link
+        $: 新增链接类型S，指自动连接到外域，S为Scoped的缩写
+        ?: SyntaxException : 初步检查一下语法错误
+    """
     def _parse_link(self):
         try:
             result = re.findall(self.pattern["link"], self.chunk)
@@ -222,6 +236,11 @@ class LazyCommentBlock(CommentBlock):
             else:
                 raise SyntaxException(self.pattern["link"].pattern, self.chunk, self)
 
+    """
+        @: _findall
+        $: 对re.findall的包装
+        ?: IntegratedException: 当缺少必要字段时引发
+    """
     def _findall(self, key, do):
 
         if self.pattern[key] is None:
@@ -337,6 +356,12 @@ class ClassBlock(CommentBlock):
         return cls
 
 
+"""
+    &: class LazyClassBlock
+    ^: ClassBlock -> public
+    ^: LazyCommentBlock -> public
+    $: 类注释文档节点自动连接
+"""
 class LazyClassBlock(ClassBlock, LazyCommentBlock):
     def __init__(self, comment):
         super().__init__(comment)
@@ -360,8 +385,6 @@ class LazyClassBlock(ClassBlock, LazyCommentBlock):
     $: 定义如何从注释中提取一个函数的所有信息
     LK: comments
 """
-
-
 class FunctionBlock(CommentBlock):
     """
         @: init
@@ -487,6 +510,12 @@ class FunctionBlock(CommentBlock):
         return func
 
 
+"""
+    &: class LazyFunctionBlock
+    ^: FunctionBlock -> public
+    ^: LazyCommentBlock -> public
+    $: 函数注释文档节点自动连接，必须字段为desc
+"""
 class LazyFunctionBlock(FunctionBlock, LazyCommentBlock):
     def __init__(self, comment):
         super().__init__(comment)
@@ -565,6 +594,12 @@ class ModuleBlock(CommentBlock):
         return mod
 
 
+"""
+    &: class LazyModuleBlock
+    $: 模块注释文档节点自动连接，必须自动为desc
+    ^: ModuleBlock -> public
+    ^: LazyCommentBlock -> public
+"""
 class LazyModuleBlock(ModuleBlock, LazyCommentBlock):
     def __init__(self, comment):
         super().__init__(comment)
@@ -660,6 +695,13 @@ class VariableBlock(CommentBlock):
         return var
 
 
+
+"""
+    &: class LazyVariableBlock
+    ^: VariableBlock -> public
+    ^: LazyCommentBlock -> public
+    $: 变量注释节点自动连接，必要自动为desc和type
+"""
 class LazyVariableBlock(VariableBlock, LazyCommentBlock):
     def __init__(self, comment):
         super().__init__(comment)
@@ -784,6 +826,12 @@ class ReferencedBlock(CommentBlock):
         logging.error("reference only has ONE in a module!")
 
 
+"""
+    &: class LazyReferencedBlock
+    ^: ReferencedBlock -> public
+    ^: LazyCommentBlock-> public
+    $: 引用注释节点自动连接
+"""
 class LazyReferencedBlock(ReferencedBlock, LazyCommentBlock):
     def lazy_getObject(self, proxy):
         return self.getObject()

@@ -1,45 +1,1405 @@
-# Dependency
-('re',)
-('os',)
-('requests',)
+Project *docPy*
 
+desc
 
 ---
 
-# Description
-T h i s  D o c   h a v e     N O F U C K USE! 
+# Module DocObject
+ 定义文档节点对象，从注释块对象中生成一个指定的文档节点 该节点将用于*1.产生链接特性 2.方便functional.report()函数访问文档的所有节点*
 
 ---
-
-##  class PyParser
-
-
-  this class is used to lalalal
-
+## Class BasedObject
+ 抽象基类，所有节点对象都继承自它
 
 ---
-## __init__
+### name  (*type*=str)
 
-### v->(*void*):
+ 文档节点的名称，如一个类名或者一个模块名
+
+### desc  (*type*=str)
+
+对该节点的描述，也就是注释内容
+
+### linked_to  (*type*=str|list)
+
+ 该节点所指向的父节点，根据子类的不同而类型不同 一个类域下的所有节点的linked_to均未该类的名字，一个Project或者Module下的 节点均未列表
+
+### add_parent()
+
+**parent** (*type=*subClassOfBaseObject)
+
+> 该节点链接到的对象
+
+ *该类不直接提供给外部使用，仅在add_child中使用，add_child为对外提供的接口*如果重复父亲添加子，子添加父亲，则会导致关系冗余。
+
+### add_child()
+
+**child** (*type=*subClassOfBaseObject)
+
+> 指向该类的子节点
+
+ 提供给functional中的函数使用，用于添加链接
+
+## Class Scoped
+ 定义域对象，提供给*Lazy*对象继承
+
+---
+### priority  (*type*=int)
+
+ 在域栈中的优先级，根据该数值的大小进行入栈出栈操作
+
+### init()
+
+构造器
+
+### __eq__()
+
+ 注意！定义了\_\_eq__的将不再是hashable的对象了，如果想要实现hashable需要继承父类的__hash__对象
+
+### __gt__()
+
+
+
+### __lt__()
+
+
+
+### __le__()
+
+
+
+### __ge__()
+
+
+
+## Class ScopedObject
+ 在对一个源码文档进行扫描搜索时，随着扫描的进行，指针会不时地进入和退出一个特点的区域，例如在处理一个类方法时，指针在一个类的域中；处理一个模块时，指针处在一个项目域中。ScopedObject对这种行为进行了抽象，在解析文档时，有且仅有一个全域，即ScopedObject自身。当开始扫描文档时，该类自举，将self压入栈内，当扫描完退出文档时，该域对象弹出域栈。在扫描期间，每进入一个域，则入栈该域对象；退出该域时，弹出域栈，直到遇到第一个优先级更大的域对象时，停止弹栈。此时栈顶就为当前域。从广义上将每个文档对象都应当有自己的域，但是在源码文档中，有”域“这个概念的就仅有Project/Module/Class三个文档节点对象，因此每当进入这三者其一时，域对象需要表现为一个文档节点对象的代理，通过该代理进行操作，实现了解耦，使得无需再修改functional的代码。它分别继承BaseObject和Scoped类
+
+---
+### _proxy  (*type*=subClassOf[Scoped])
+
+ 域对象的代理
+
+### _stack  (*type*=list[stack])
+
+域栈
+
+### init()
+
+
+
+### __del__()
+
+析构函数，由于再构造时会将self压入栈内，而且其优先级最高，所以再程序中无法弹出栈底元素(self)，所以再析构时，应该将其弹出，这样对该域对象(self)的引用计数就会安全的降为0，否则可能在内存中一直保存(不过肯能在_stack析构之后，该对象的引用计数也会安全降为0)
+
+### change_scope()
+
+ 当要切换域对象时，函数将要比对当前域（栈顶元素）与将要切换到的域对象的优先级 当遇到域优先级更大的域对象时，需要弹出栈顶元素直到遇到比obj域范围更大的对象为止 然后将其压栈；否则直接压栈，表示进入了更小的域范围
+
+### get_background()
+
+ 当在同优先级域对象之间切换时，如果不进行退栈处理，那么诸如 `self.scope.add_child(obj) - self.scope.proxy(obj)`着用的用法就会出错，由于代理对象未修改 而往一个代理对象上添加一个相同优先级的对象显然是不对的（如当前代理对象和obj均为ClassObject，那么在第一句中 add_child()就会抛出一个ValueError错误。因此，在同优先级的域对象之间相互切换应该找到背景域（当前代理对象的父节点）
+
+### top()
+
+返回栈顶元素
+
+### proxy()
+
+提供给外部的接口用于设置域代理对象
+
+### add_child()
+
+ *act-like-a-BaseObject*，实现对文档节点对象的代理功能
+
+### add_parent()
+
+ *act-like-a-BaseObject*，实现对文档节点对象的代理功能
+
+## Class ReferencedObject
+ 引用模块类
+
+---
+### linked_to  (*type*=list[str])
+
+ 父文档节点
+
+### refs  (*type*=list[str])
+
+该文档所有引用到的模块名
+
+### init()
+
+**name** (*type=*str)
+
+> the name of obejct
+
+
+
+### add_parent()
+
+
+
+### add_child()
+
+引用节点暂时无子节点
+
+## Class ProjectObject
+ 项目文档节点类，是一个Scoped
+
+---
+### modules  (*type*=list[ModuleObject|HaveRefsModuleObject])
+
+ ProjectObject所有子节点
+
+### add_parent()
+
+目前项目节点为根节点，再无父节点
+
+### add_child()
+
+ 添加子节点，应该均为模块
+
+## Class ModuleObject
+ 模块文档节点对象， 是一个Scoped
+
+---
+### classes  (*type*=list[ClassObject])
+
+ 保存该模块下所有类文档节点对象
+
+### variables  (*type*=list[VariableObject])
+
+ 保存该模块下所有变量文档节点对象
+
+### functions  (*type*=list[FunctionObject])
+
+ 保存该模块下所有函数文档节点对象，包括类方法
+
+### linked_to  (*type*=list[Object])
+
+ 所有父节点，是一个列表，也即一个类可以链接到多个模块
+
+### init()
+
+
+
+### add_parent()
+
+**parent** (*type=*BasedObject)
+
+> ；链接到的父节点
+
+
+
+### add_child()
+
+
+
+## Class HaveRefsModuleObject
+ 有引用的模块的文档对象，这是一个包装类
+
+---
+### references  (*type*=list)
+
+所有引用
+
+### init()
+
+
+
+### add_child()
+
+**child** (*type=*ReferencedObject)
+
+> 
+
+
+
+## Class ClassObject
+类文档节点对象
+
+---
+### methods  (*type*=list[ClassMethodObject])
+
+保存该类下所有方法
+
+### variables  (*type*=list[MemberVariableObject])
+
+保存该类下所有成员变量
+
+### bases  (*type*=list[tuple])
+
+保存该类的所有父类
+
+### linked_to  (*type*=list)
+
+所有父节点，为列表，也即一类可以定义再多个模块下
+
+### add_parent()
+
+**parent** (*type=*ModuleObject)
+
+> 
+
+
+
+### add_child()
+
+
+
+## Class VariableObject
+ 变量节点对象，抽象基类
+
+---
+### type  (*type*=str[AnyType])
+
+变量类型
+
+### init()
+
+
+
+### add_child()
+
+变量对象无子节点
+
+## Class MemberVariableObject
+ 成员变量文档节点对象，特化VariableObject
+
+---
+### linked_to  (*type*=ClassObject)
+
+为单个类对象
+
+### init()
+
+
+
+### add_parent()
+
+**parent** (*type=*ClassObject)
+
+> 
+
+
+
+## Class ModuleVariableObject
+ 模块变量文档节点对象，变量对象的特化
+
+---
+### linked_to  (*type*=list[ModuleObject])
+
+为列表，也即一个模块变量可以定义在多个模块中
+
+### init()
+
+
+
+### add_parent()
+
+**parent** (*type=*ModuleObject)
+
+> 
+
+
+
+## Class FunctionObject
+ 函数文档节点对象，抽象基类
+
+---
+### in_param  (*type*=list[tuple])
+
+输入参数列表，每个元素为一个元组；元组的第一个为参数类型，第二个为参数名，第三个为表里的描述信息
+
+### out_type  (*type*=str[AnyType])
+
+函数的返回值类型
+
+### exceptions  (*type*=list[str])
+
+ 函数可能抛出的异常
+
+### init()
+
+
+
+### add_child()
+
+函数对象无子节点
+
+## Class ModuleFunctionObject
+ 模块函数文档节点对象，FunctionObject的特化
+
+---
+### linked_to  (*type*=list[ModuleObject])
+
+为列表，也即一个模块函数可以定义在多个模块中
+
+### init()
+
+
+
+### add_parent()
+
+**parent** (*type=*ModuleObject)
+
+> 
+
+
+
+## Class ClassMethodObject
+ 类方法文档节点对象，FunctionObject的特化
+
+---
+### linked_to  (*type*=str)
+
+为单个类节点对象
+
+### init()
+
+
+
+### add_parent()
+
+**parent** (*type=*ClassObject)
+
+> 
+
+
+
+# Module comments
+ 对文档注释的抽象，定义不同注释类型所对应的类别/定义不同类别 的注释的提取规则(正则）。如果需要添加新的注释类别，并且该类有除了name和desc以外的 其它属性字段，那么需要在新的类里对pattern字典进行更新，添加提取规则(re.compile)。 目前，ProjectObject是一个文档对象的根节点。更广泛的推广，根节点类型只能有一个。 每个ModuleObject必须从属于一个ProjectObject/一个ClassObject必须从属于一个ModuleObject 进而类推。这样可以建立起文档关系链接树。因此根节点类型不能处理链接（因为它没有父节点），从而 必须其pipeline必须不能处理_parse_link()。链接的创建定义在functional模块中，文档节点对象定义在codeObject模块中. 模块采用工厂模式，通过BlockFactory类向用户提供接口
+
+---
+##  Ref
+ re, logging, abc, codeObject, exceptions.Exce
+
+## Class CommentBlock
+ 抽象基类，所有注释块对象均继承自CommentBlock 子类中需要实现pipeline()函数, getObject()函数和_parse_name()函数
+
+---
+### chunk  (*type*=str)
+
+ 保存注释内容
+
+### name  (*type*=str)
+
+ 从注释内容中解析出注释名
+
+### desc  (*type*=ste)
+
+ 注释内容的描述部分，用于解释说明该对象的用途
+
+### link_type  (*type*=str)
+
+ 链接的类型，目前只定义了两类链接，一类是LK类型，指该对象链接到模块(ModuleObject)或这项目(ProjectObject) 第二类是M类型，指该对象链接到类(ClassObject)
+
+### link  (*type*=str)
+
+ 从注释内容中提取的链接到对象字符串，对该字符串的链接解析工作则有functional定义
+
+### pattern  (*type*=dict[str:re.compile])
+
+ 提取规则，在子类中通过update方法拓展
+
+### init()
+
+**comment** (*type=*str)
+
+> 注释内容
+
+**return**  void
+
+ 构造器
+
+### _findall()
+
+**key** (*type=*str)
+
+> 需要提取对象的提取规则，必须在pattern中，否则引发KeyError
+
+**do** (*type=*callable)
+
+> 定义提取动作，一般是赋值或者列表拓展动作
+
+**return**  void
+
+ 对re.findall的封装，根据提取规则key从chunk中提取目标内容，如果没有找到任何内容 会引发SyntaxException错误
+
+### _parse_desc()
+
+**return**  void
+
+ 因为desc的格式在每个注释块中的格式统一，因此该函数不可重写，除非重新定义一种desc格式
+
+### _parse_name()
+
+**return**  void
+
+ 由于子类的name格式不统一，因此子类必须在pattern中重新定义自己name的提取规则， 但提取name的行为一致，所以该类也不用在子类中重写
+
+### pipeline()
+
+**return**  void
+
+ 对所有需要从注释块中提取的字段进行批处理，由于每个子类的字段不同，在子类中必须重写该函数
+
+### _parse_link()
+
+**return**  void
+
+ 解析链接类型和链接到字符串
+
+### getObject()
+
+**return**  subclassOfCommentBlock
+
+ 从已提取的字段中生成对应的文档节点对象
+
+## Class LazyCommentBlock
+ 实现自动链接到外域
+
+---
+*derived from* **public CommentBlock**
+
+### necessary_field  (*type*=list[str])
+
+ 每个注释文档节点对象必须的字段，子类可以扩充 在该列表中的字段不可或缺，在注释中必须标明，否则引发IntegratedException
+
+### _parse_link()
+
+**throw**  SyntaxException
+
+> 初步检查一下语法错误
+
+ 新增链接类型S，指自动连接到外域，S为Scoped的缩写
+
+### _findall()
+
+**throw**  IntegratedException
+
+> 当缺少必要字段时引发
+
+ 对re.findall的包装
+
+## Class ClassBlock
+ 定义如何从注释中提取一个类的所有信息
+
+---
+### bases  (*type*=list[tuple])
+
+ 父类列表, 父类类名和继承关系
+
+### init()
+
+**comment** (*type=*str)
+
+> 待提取注释
+
+构造器
+
+### _parse_bases()
+
+ 解析类的父类
+
+### pipeline()
+
+**return**  void
+
+仅处理类名的提取
+
+### getObject()
+
+**return**  ClassObject
+
+ 从注释中提取一个ClassObject对象
+
+## Class LazyClassBlock
+ 类注释文档节点自动连接
+
+---
+*derived from* **public ClassBlock**
+
+*derived from* **public LazyCommentBlock**
+
+## Class FunctionBlock
+ 定义如何从注释中提取一个函数的所有信息
+
+---
+### ins  (*type*=tuple[type, name, desc])
+
+ 函数的输入参数，为一个元组，元组第一个元素为参数类型，第二元素为参数名，第三个元素为参数的描述
+
+### out  (*type*=str[AnyType])
+
+ 函数的返回值，可以为任意类型，用一个str表示返回值的类型
+
+### exceptions  (*type*=list[str])
+
+ 函数可能会抛出的异常
+
+### init()
+
+**comment** (*type=*str)
+
+> 待提取注释
+
+构造器
+
+### _parse_name()
+
+**return**  void
+
+
+
+### __parse_ins()
+
+**return**  void
+
+
+
+### __parse_out()
+
+**return**  void
+
+
+
+### pipeline()
+
+**return**  void
+
+
+
+### getObject()
+
+**return**  void
+
+由于一个函数可以是一个模块内定义的模块级函数，也可以是一个类中定义的方法所以根据链接类型的不同，返回不同的FunctionObject.当链接到模块时，返回一个 ModuleFunctionObject；如果链接到类，则返回一个ClassMethodObject，二者同继承自FunctionObject
+
+## Class LazyFunctionBlock
+ 函数注释文档节点自动连接，必须字段为desc
+
+---
+*derived from* **public FunctionBlock**
+
+*derived from* **public LazyCommentBlock**
+
+## Class ModuleBlock
+ 定义如何从注释中提取一个模块类的所有信息
+
+---
+### init()
+
+**comment** (*type=*str)
+
+> 待提取注释
+
+构造器
+
+### pipeline()
+
+**return**  void
+
+ 仅提取模块名
+
+### getObject()
+
+**return**  HaveRefsModuleObject
+
+返回一个HaveRefsModuleObject对象
+
+## Class LazyModuleBlock
+ 模块注释文档节点自动连接，必须自动为desc
+
+---
+*derived from* **public ModuleBlock**
+
+*derived from* **public LazyCommentBlock**
+
+## Class VariableBlock
+ 定义如何从注释中提取一个变量类的所有信息
+
+---
+### type  (*type*=str[AnyType])
+
+ 变量的类型
+
+### init()
+
+**comment** (*type=*str)
+
+> 待提取注释
+
+构造器
+
+### _parse_type()
+
+**return**  void
+
+解析变量类型
+
+### pipeline()
+
+**return**  void
+
+
+
+### getObject()
+
+ 根据链接性不同返回一个VariableObject的子类。当链接到模块时返回一个ModuleVariableObject对象 当链接到类时，返回一个MemberVariableObject对象
+
+## Class LazyVariableBlock
+ 变量注释节点自动连接，必要自动为desc和type
+
+---
+*derived from* **public VariableBlock**
+
+*derived from* **public LazyCommentBlock**
+
+## Class ReferencedBlock
+ 定义如何从注释中提取一个依赖类的所有信息
+
+---
+### referenced  (*type*=list[str])
+
+ 该模块所依赖的所有对象
+
+### init()
+
+**comment** (*type=*str)
+
+> 待提取注释
+
+构造器
+
+### _parse_name()
+
+**return**  void
+
+ 引用在一个模块中仅有一个，因此name未固定'Ref'
+
+### _parse_desc()
+
+**return**  void
+
+ 引用的desc未固定的'references'
+
+### _parse_ref()
+
+**return**  void
+
+ 从注释中提取出所有依赖
+
+### pipeline()
+
+**return**  void
 
  
-### *return:* void
 
+### getObject()
 
+**return**  ReferencedObject
 
----
+ 未完成，如何实现单例模式
 
-## foo
-
-### i1->(*int*):
-
- id
-### l2->(*str*):
-
- name
-### *return:* void
-
- fuck
+## Class LazyReferencedBlock
+ 引用注释节点自动连接
 
 ---
+*derived from* **public ReferencedBlock**
+
+*derived from* **public LazyCommentBlock**
+
+## Class ProjectBlock
+ 定义如何从注释中提取一个项目类的所有信息
+
+---
+### init()
+
+**return**  void
+
+构造器
+
+### pipeline()
+
+**return**  void
+
+
+
+### getObject()
+
+**return**  ProjectObject
+
+ 根据提取出的信息返回一个ProjectObject对象
+
+## Class BlockFactory
+ 一个工厂模式，提供用户接口， 例如在代码中 `factory = BlockFactory(); factory.create_bobj_by_name('name')` 该类产生的对象将会被用在functional中实现链接
+
+---
+# Module userInf
+ 用户命令行接口
+
+---
+# Module Exceptions
+ 定义在docPy中需要用到的异常，方便后期维护
+
+---
+## Class CommentParserException
+ 抽象基类，定义在一个CommentBlock对象解析所需关键字字段时，出现完整性缺失异常
+
+---
+### comment_obj  (*type*=subclassOfCommentBlock)
+
+ 解析时异常对象
+
+### init()
+
+**comment_obj** (*type=*subclassOfCommentBlock)
+
+> 出现解析错误时的注释文档节点对象
+
+构造器
+
+## Class IntegratedException
+ 定义完整性异常字段
+
+---
+### necessary_field  (*type*=str)
+
+ 完整性定义
+
+### init()
+
+**comment_obj** (*type=*subclassOfCommentBlock)
+
+> 出现解析错误时的注释文档节点对象
+
+
+
+## Class SyntaxException
+ 定义语法异常
+
+---
+## Class LinkTypeException
+ 定义连接异常，主要是检查用户在编写文档注释时是否符合节点之间的逻辑继承关系
+
+---
+# Module functional
+ 模块的主要任务用来解决依赖关系实现对文档节点的链接，其次将链接好的文档节点 转换为指定的格式（如.md/.html等）。
+
+---
+##  Ref
+threading.Lock,comments.commentGenerator,ScopedObject
+
+## Class AbstractSignalFunctional
+ 实现链接。把在解析文档的时候产生的注释对象节点按照其指定的链接规则链接起来，链接有两个 第一种是M类链接，它表示为将该节点链接到类节点对象，因此只能够将函数和变量定义给该链接类型 第二中是LK类链接，它表示将该节点链接到模块或者项目对象节点，因此可以定义给任意节点类型定义该链接 当然这是链接的内部实现，在使用时可以不用显式的定义LK或者M，但是当该节点对象需要链接到多个 父节点时，需要显示地标出LK。函数lazy_link()实现了隐式链接
+
+---
+### _unresolved_relations  (*type*=dict[str:BaseObject])
+
+ 存放未解决的关系
+
+### _obj_set  (*type*=dict[str:BaseObject])
+
+ 存放文档的所有文档节点对象
+
+### scope  (*type*=ScopedObject)
+
+ 每个项目项目仅有一个scope，随着注释的解析，每进入一个Scoped对象 scope就会将其进行代理，并将其压入scope的对象栈。具体参看codeObject/Scoped对象的实现
+
+### init()
+
+ 构造器
+
+### links()
+
+**tgt** (*type=*subClassOfBaseObject)
+
+> 需要链接的对象
+
+ link()的具体实现，在当前已经解析的所有文档对象_obj_set中依次查找 每个parent，如果找到则将tgt链接到_obj_set[parent]，否则将tgt加入的 _unresolved_relations中。
+
+### link2()
+
+ 在解析完一个源码文件后对所有未解决的关系进行再一次链接 如果没有发现待解决的关系，将会报错
+
+### link()
+
+**return**  BaseObject
+
+ 从注释块对象bobj中获取一个BaseObject对象，并链接。是对\_\_link()的包装
+
+### lazy_link()
+
+**bobj** (*type=*subClassOfCommentBlock)
+
+> 文档注释对象
+
+ 对link()的包装。需要强调的一点是，由于scope对象在构造时使用自己自举 因此在解析文档时，如果不定义Pj/Module或者Class，而直接定义函数或者变量 那么会在解析第一个文档注释的时候进入第一个判断块，而此时scope的当前域为其自身（一个ScopedObject对象） 必然会引起错误。因此，在编写代码时，必须有项目有模块，结构逻辑清晰
+
+### dump()
+
+**info** (*type=*str)
+
+> 需要保存的信息
+
+**path** (*type=*path)
+
+> 保存地点
+
+ 该方法放在这里意义不明确，待改进
+
+### report()
+
+ 对所有产生的文档对象和链接进行报道，子类通过重写该方法实现 转换到指定文档格式的任务
+
+## Class SynSignalFunctional
+ 提供写保护，但似乎没啥卵用
+
+---
+### file_lock  (*type*=threading.Lock)
+
+提供对文件的互斥访问锁
+
+### dump()
+
+**info** (*type=*str)
+
+> 要输出到文件的信息
+
+**path** (*type=*str)
+
+> 输出路径
+
+
+
+## Class ReportSignalFunctional
+ 提供print风格的简单解析结果的报表格式类
+
+---
+## Class ToMarkdownSignalFunctional
+ 转换到markdown格式
+
+---
+# Module Loader
+ 定义加载器
+
+---
+##  Ref
+ os,re,logging,threading,SingleFileLoader,FileLoader
+
+## Class MultipleFileLoader
+ 多文件加载器，仅处理一个目录下的所有文件，将所有文件加载 进入_loaded_file中，并进行分页。打开文件读操作使用匿名的线程处理
+
+---
+### path  (*type*=str)
+
+ 保存文档路径
+
+### _loaded_file  (*type*=list[SingleFileLoader])
+
+ 保存_files_lib_path下所有文件的文件加载器
+
+### init()
+
+**path** (*type=*str)
+
+> 文档目录
+
+**return**  void
+
+构造器
+
+### set_attr_by_path()
+
+**return**  void
+
+设置_files_lib_path属性，由于本人最早开始写该类并在此之前一直在用Java所以免不了有些Java的'不良习惯'，忍着吧
+
+### load()
+
+**return**  void
+
+ 加载文件进入内存，并启动加载线程
+
+## Class MultipleDirsLoader
+ 递归查询整个目录并将文档加载进入内存
+
+---
+### load()
+
+**return**  void
+
+对函数load_recursion的包装
+
+### __load_recursion()
+
+**_path** (*type=*str)
+
+> 递归路径
+
+**return**  void
+
+递归查找路径下的所有文档，并加载进入内存，起始路径未_files_lib_path通过包装器load传入启动递归
+
+## Class FileLoader
+ 抽象基类，定义一些函数, SingleFileLoad/MultipleFileLoader/MultipleDirsLoader均继承自它
+
+---
+## Class SingleFileLoader
+ 加载单个文件进入内存，并分页
+
+---
+### _file_path  (*type*=str)
+
+文件路径
+
+### _file_format  (*type*=str)
+
+文件格式
+
+### _file_name  (*type*=str)
+
+文件名
+
+### chunk  (*type*=str)
+
+读入的文件内容缓冲区
+
+### limitation  (*type*=str)
+
+单页面的大小限制
+
+### pages  (*type*=str)
+
+ 分页存储
+
+### init()
+
+**limit** (*type=*int)
+
+> 定义一个页面大小，默认未5KB
+
+**return**  void
+
+构造器
+
+### set_attr_by_path()
+
+**path** (*type=*str)
+
+> 文件路径
+
+**return**  void
+
+set方法
+
+### set_attr()
+
+**path** (*type=*str)
+
+> 文件路径
+
+**name** (*type=*str)
+
+> 文件名
+
+**format** (*type=*str)
+
+> 文件格式
+
+**return**  void
+
+set方法
+
+### load()
+
+**return**  void
+
+加载单个文件进入你日常并分页
+
+# Module Parser
+该模块定义解析器
+
+---
+##  Ref
+rReportSignalFunctional, AbstractSignalFunctional,BlockFactory,multipleLoader,SingleLoader
+
+## Class AbstractParser
+ 定义解析从指定文件中读取出来的块的行为，是一个抽象基类 目前出现的问题在于是否得把对文件注释块的解析工作交给FileLoader，因为在定义了CommentBlock之后 原本AbstractParser的解析工作突然全部抽象出来并移交给CommentBlock的pipeline函数和getObject函数
+
+---
+### _before  (*type*=str)
+
+ 注释开始符
+
+### _after  (*type*=str)
+
+ 注释结束符
+
+### _comment_list  (*type*=Queue)
+
+ 将解析注释内容和处理链接的任务异步，提高效率
+
+### _comment_pattern  (*type*=re.compile)
+
+ 从文档流中提取注释块
+
+### iter_of_comment  (*type*=iter)
+
+ _comment_pattern的迭代器
+
+### __init__()
+
+**after** (*type=*str)
+
+> 注释后符号
+
+**before** (*type=*str)
+
+> 注释前符号
+
+**path** (*type=*str)
+
+> 需要加载的文档，批处理类为目录
+
+**mapper** (*type=*AbstractSignalFunctional)
+
+> 默认使用ReportSignalFunctional,指定符号与CommentBlock的映射关系。该类使用工厂模式产生CommentBlock对象
+
+**loader** (*type=*FileLoader)
+
+> 文件加载器，默认使用SingleFileLoader，批处理类使用MultipleFileLoader
+
+**return**  void
+
+ 构造函数，必须的参数为after和before
+
+### pre_symmetric_check()
+
+**page_content** (*type=*str)
+
+> 注释内容
+
+**return**  bool
+
+ 对偶性检查，对_comment_list的每一块注释进行注释符号对偶检查 如果对称，那么返回True，parse_comment()函数将不再会检查下一条注释块的结束注释符号 否则返回False，parse_comment()函数就会进一步在下下面若干条注释块中查找结束注释符号 如果SingleFileLoader的limitation设置的足够大，足以容纳下文档中的最大注释块的大小，那么 只要编译器通过，则注释符号一定对称
+
+### _safe_suffix()
+
+**who** (*type=*SingleFileLoader)
+
+> 指定需要检查行结束安全性的对象
+
+**after** (*type=*str)
+
+> 注释结束符
+
+**return**  void
+
+ 当在_comment_list中的一个注释块结束时，由于FileLoader会分页，因此有可能块与块之间 隔断了一个完整的注释符号，因此要确保在每一页的最后有一个完整的注释符。函数总是检查结束符号， 这是由于在parse_comment中，函数不论注释符是否对称，都会用正则匹配一次，因此，经过正则匹配， 在该注释块中，总是第一个出现注释起始符。如果出现截断，那么函数会将下一块被截断的注释结束符 复制到上一块中，并删除掉下一行被截断的结束符
+
+### parse_comments()
+
+**who** (*type=*FileLoader)
+
+> 指定需要解析的对象
+
+**return**  void
+
+ 将分页的注释块根据注释开始和结束符组合成一个完整的注释段，该函数在批处理类中重写
+
+### parse_comment()
+
+**v** (*type=*void)
+
+> 
+
+**return**  void
+
+ 将分页的注释块根据注释开始和结束符组合成一个完整的注释段，parse_comments的一个包装器
+
+### __prefix_standard()
+
+**comment** (*type=*str)
+
+> 注释块
+
+**return**  str
+
+ 从注释块comment中提取在CommentBlock的工程类中已定义的块前缀，如类&/函数@等
+
+### resolve_unlinked()
+
+**v** (*type=*void)
+
+> 
+
+**return**  void
+
+解决所有在处理单个文件时没出解决的链接，如果在处理完所有目标文件时没有发现需要链接的对象，则会报错
+
+### switch()
+
+**v** (*type=*void)
+
+> 
+
+**return**  void
+
+ 从所有注释块中取出每个注释块，获取其前缀以从CommentBlock生成已定义的Block对象。 在生成指定的注释对象后，块对象会解析该注释块并产生一个Object.之后，函数将会第一次 尝试解决该Object的链接性，如果暂时没有解析则会等到处理完所有comment之后再次尝试 解决
+
+### run()
+
+**v** (*type=*void)
+
+> 
+
+**return**  void
+
+ 用户接口，在使用类时，直接使用该函数即可产生所有对象
+
+## Class BADiffCommentParser
+ 注释结束符和开始符不同的文档类型（如cpp,html)处理器 由于前后符号不同，处理方法相对简单，速读更快
+
+---
+### init()
+
+**args** (*type=*tuple)
+
+> 位置参数
+
+**kwargs** (*type=*dict)
+
+> 关键字参数
+
+**return**  void
+
+ 构造器，其必须参数同AbstractParser
+
+### __gleft__()
+
+**ps** (*type=*str)
+
+> 注释内容
+
+**return**  list
+
+ 找到一个注释块的所有注释开始符位置
+
+### __gright__()
+
+**ps** (*type=*str)
+
+> 注释内容
+
+**return**  list
+
+ 找到一个注释块的所有注释结束符位置
+
+### pre_symmetric_check()
+
+**page_content** (*type=*str)
+
+> 同AbstractParser
+
+**return**  void
+
+ 对偶检查的具体实现，该函数冗余，应当定义在AbstractParser中 
+
+## Class GCommentParser
+ 通用注释解析器，不论注释结束和开始符是否相同都可以使用该类进行解析. 如果开始和结束符相同，则在类构造时会给开始符和结束符添加区分符，实现隐型替换 如果不同，则表现为BADiffCommentParser
+
+---
+### _org_ab  (*type*=str)
+
+ 未添加区分符的原始注释开始结束符
+
+### init()
+
+**args** (*type=*tuple)
+
+> 位置参数
+
+**kwargs** (*type=*dict)
+
+> 关键字参数
+
+**return**  void
+
+构造器，必须参数同AbstractParser
+
+### __differ()
+
+**who** (*type=*SingleFileLoader)
+
+> 为了能够尽量通用化__differ函数，指定who为一个单文件加载
+
+**return**  void
+
+ 对所有以确保安全的注释块添加区分符
+
+## Class BatchDirParser
+ 批处理处理器，加载一个目录下的所有文件，一般不直接使用 而是使用其特化的子类，如专门批处理c++或者python源码的批处理器。它的FileLoader 是MultipleFileLoader。
+
+---
+### init()
+
+**return**  void
+
+构造器，必须参数同AbstractParser
+
+### parse_comment()
+
+**return**  void
+
+ 对AbstractParser.parse_comment的重写。对每个加载进入内存的文件对象(SingleFileLoader) 进行提取注释操作
+
+## Class CppBatchDirParser
+ c++源码批处理文档生成器，特化了注释起始和结束符为/* */
+
+---
+## Class HtmlBatchDirParser
+ html源码批处理文档生成器，特化了注释起始和结束符<!-- -->
+
+---
+*derived from* ** html源码批处理文档生成器，特化了注释起始和结束符<!-- -**
+
+## Class PythonBatchDirParser
+ python源码批处理文档生成器，特化了注释起始和结束符
+
+---
+## Class CppParser
+ c++单源码文档处理器，用于解析单个c++源码文档
+
+---
+### init()
+
+**path** (*type=*str)
+
+> 源码文档路径
+
+**mapper** (*type=*AbstractSignalFunctional)
+
+> 匹配器，默认为报表匹配器*ReportSignalFunctional*，可以自定义匹配器，目前提供了转为Markdown格式的ToMarkdownSignalFunctional匹配器
+
+**loader** (*type=*FileLoader)
+
+> 文档加载器，默认为SingleFileLoader
+
+**return**  void
+
+ 构造器
+
+## Class PyParser
+ Python单源码文档处理器，用于解析单个Python源码文档
+
+---
+### init()
+
+**path** (*type=*str)
+
+> 源码文档路径
+
+**mapper** (*type=*AbstractSignalFunctional)
+
+> 匹配器，默认为报表匹配器*ReportSignalFunctional*，可以自定义匹配器，目前提供了转为Markdown格式的ToMarkdownSignalFunctional匹配器
+
+**loader** (*type=*FileLoader)
+
+> 文档加载器，默认为SingleFileLoader
+
+**return**  void
+
+ 构造器
+
+## Class HtmlParser
+ Html单源码文档处理器，用于解析单个Html源码文档
+
+---
+### init()
+
+**path** (*type=*str)
+
+> 源码文档路径
+
+**mapper** (*type=*AbstractSignalFunctional)
+
+> 匹配器，默认为报表匹配器*ReportSignalFunctional*，可以自定义匹配器，目前提供了转为Markdown格式的ToMarkdownSignalFunctional匹配器
+
+**loader** (*type=*FileLoader)
+
+> 文档加载器，默认为SingleFileLoader
+
+**return**  void
+
+ 构造器
+
+# Module PyTest
+ The unittest module can be used from the command line to run tests from modules, classes or even individual test methods:
+
+---
+## Class Pypp
+ This allows you to use the shell filename completion to specify the test module. The file specified must still be importable as a module. The path is converted to a module name by removing the ‘.py’ and converting path separators into ‘.’. If you want to execute a test file that isn’t importable as a module you should execute the file directly instead.
+
+---
+### this  (*type*=Pypp)
+
+ The unittest module provides a rich set of tools for constructing and running tests. This section demonstrates that a small subset of the tools suffice to meet the needs of most users.
+
+### init()
+
+**v** (*type=*void)
+
+> 
+
+**return**  void
+
+ The script Tools/unittestgui/unittestgui.py in the Python source distribution is a GUI tool for test discovery and execution. This is intended largely for ease of use for those new to unit testing. For production environments it is recommended that tests be driven by a continuous integration system such as Buildbot, Jenkins or Hudson.
+
+### foo()
+
+**i1** (*type=*int)
+
+> id
+
+**l2** (*type=*str)
+
+> name
+
+**return**  bool
+
+ A testcase is created by subclassing unittest.TestCase. The three individual tests are defined with methods whose names start with the letters test. This naming convention informs the test runner about which methods represent tests.
+
+### Lock  (*type*=GIL::Lock)
+
+ The final block shows a simple way to run the tests. unittest.main() provides a command-line interface to the test script. When run from the command line, the above script produces an output that looks like this:
+
+### GloFuncOfPyTest()
+**string** (*type=*str)
+
+> input a string of params
+
+### GloFuncOfPyTest()
+**string** (*type=*str)
+
+> input a string of params
+
+**idx** (*type=*int)
+
+> this index of all
+
+**return**  bool
+
+The setUp() and tearDown() methods allow you to define instructions that will be executed before and after each test method. They are covered in more detail in the section Organizing test code.
+
+### LocalFuncOfPyText()
+**string** (*type=*str)
+
+> input a string of params
+
+**return**  bool
+
+The setUp() and tearDown() methods allow you to define instructions that will be executed before and after each test method. They are covered in more detail in the section Organizing test code.
 
